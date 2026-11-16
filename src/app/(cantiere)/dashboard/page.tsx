@@ -1,15 +1,30 @@
 "use client";
 
+/**
+ * @file src/app/(cantiere)/dashboard/page.tsx
+ * @description Dashboard operativa principale per il ruolo Geometra (`/dashboard`).
+ * Filtra e visualizza esclusivamente i cantieri con stato `"Aperto"`, permettendo l'accesso
+ * rapido alla pagina documentale di ciascun cantiere.
+ */
+
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { mockCantieri } from "@/mocks/cantieri";
 import { HardHat, MapPin, ChevronRight, CheckCircle2 } from "lucide-react";
 
+/**
+ * Contenuto interno della Dashboard Geometra.
+ * Filtra i cantieri aperti da `mockCantieri` e mostra un eventuale toast di conferma
+ * quando la query string contiene `?pdfSaved=1`.
+ *
+ * @returns Elemento JSX con l'elenco delle card dei cantieri attivi.
+ */
 function DashboardContent() {
   const searchParams = useSearchParams();
   const [showPdfToast, setShowPdfToast] = useState(false);
 
+  // Mostra una notifica temporanea se si proviene da un salvataggio PDF
   useEffect(() => {
     if (searchParams.get("pdfSaved") === "1") {
       setShowPdfToast(true);
@@ -18,6 +33,7 @@ function DashboardContent() {
     }
   }, [searchParams]);
 
+  // Filtra i soli cantieri attualmente aperti in lavorazione
   const cantieriAttivi = mockCantieri.filter(
     (cantiere) => cantiere.stato === "Aperto"
   );
@@ -76,9 +92,20 @@ function DashboardContent() {
   );
 }
 
+/**
+ * Pagina `/dashboard` avvolta in un boundary `<Suspense>` per l'uso sicuro di `useSearchParams` in Next.js.
+ *
+ * @returns Elemento JSX della pagina Dashboard Geometra.
+ */
 export default function GeometraDashboardPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-2xl p-4 text-sm text-slate-500">Caricamento cantieri...</div>}>
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-2xl p-4 text-sm text-slate-500">
+          Caricamento cantieri...
+        </div>
+      }
+    >
       <DashboardContent />
     </Suspense>
   );

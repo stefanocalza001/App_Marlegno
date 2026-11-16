@@ -1,11 +1,24 @@
 "use client";
 
+/**
+ * @file src/app/(cantiere)/layout.tsx
+ * @description Layout condiviso per tutte le rotte dell'Area Operativa Geometra (`(cantiere)`).
+ * Fornisce la Topbar sticky con logo aziendale e controllo di logout, e centra il contenuto
+ * in un contenitore responsive `max-w-2xl`.
+ */
+
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { LogOut, User as UserIcon } from "lucide-react";
 
+/**
+ * Layout dell'area operativa cantiere.
+ *
+ * @param props - Proprietà contenenti la vista corrente (`children`).
+ * @returns Struttura con Topbar bianca e area `main` centrata.
+ */
 export default function CantiereLayout({
   children,
 }: {
@@ -15,7 +28,7 @@ export default function CantiereLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Topbar Area Operativa */}
+      {/* Topbar Sticky Area Operativa */}
       <header className="sticky top-0 z-20 w-full bg-white shadow-sm">
         <div className="mx-auto flex h-16 max-w-2xl items-center justify-between px-5">
           <Link href="/dashboard" className="flex items-center">

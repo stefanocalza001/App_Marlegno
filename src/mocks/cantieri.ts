@@ -1,5 +1,15 @@
+/**
+ * @file src/mocks/cantieri.ts
+ * @description Dataset fittizio dei cantieri Marlegno per la simulazione della Dashboard Geometra e dei moduli documentali.
+ */
+
 import { Cantiere } from "@/types";
 
+/**
+ * Lista mock dei cantieri aziendali.
+ * Include 3 cantieri con stato `"Aperto"` (sia alla prima compilazione che in aggiornamento)
+ * e 1 cantiere `"Chiuso"` escluso dal filtro della vista operativa.
+ */
 export const mockCantieri: Cantiere[] = [
   {
     id: "cant-01",

@@ -1,7 +1,14 @@
 "use client";
 
+/**
+ * @file src/components/ui/SignaturePad.tsx
+ * @description Componente interattivo basato su `<canvas>` HTML5 per l'acquisizione della firma digitale
+ * su dispositivi touch (smartphone/tablet in cantiere) e desktop.
+ */
+
 import React, {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -9,17 +16,37 @@ import React, {
 } from "react";
 import { Eraser, PenLine } from "lucide-react";
 
+/**
+ * Metodi imperativi esposti tramite `ref` dal componente `SignaturePad`
+ * per consentire al form padre di estrarre l'immagine Base64 durante la generazione del PDF.
+ */
 export interface SignaturePadHandle {
+  /** Restituisce la firma come stringa Data URL PNG (`data:image/png;base64,...`) o `null` se vuota. */
   getDataURL: () => string | null;
+  /** Indica se il riquadro firma è attualmente privo di tratti disegnati. */
   isEmpty: () => boolean;
+  /** Cancella integralmente il contenuto del canvas e ripristina lo stato iniziale. */
   clear: () => void;
 }
 
+/**
+ * Proprietà di configurazione del componente `SignaturePad`.
+ */
 interface SignaturePadProps {
+  /** Etichetta descrittiva mostrata sopra l'area di firma. */
   label?: string;
+  /** Callback invocata al termine di un tratto o alla pulizia del canvas. */
   onChange?: (hasSignature: boolean, dataUrl?: string) => void;
 }
 
+/**
+ * Riquadro firma digitale con calibrazione automatica High-DPI (`devicePixelRatio`)
+ * e blocco dello scroll verticale nativo durante il disegno touch (`touch-none`).
+ *
+ * @param props - Etichetta e callback di modifica dello stato firma.
+ * @param ref - Riferimento imperativo conforme a `SignaturePadHandle`.
+ * @returns Elemento JSX contenente l'intestazione, il pulsante di pulizia e il `<canvas>`.
+ */
 export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
   function SignaturePad(
     { label = "Firma Impresa Esecutrice", onChange },
@@ -29,6 +56,23 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
     const isDrawingRef = useRef(false);
     const [hasSignature, setHasSignature] = useState(false);
 
+    /**
+     * Pulisce il canvas di disegno e notifica il componente padre.
+     */
+    const clearCanvas = useCallback(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setHasSignature(false);
+      if (onChange) {
+        onChange(false, undefined);
+      }
+    }, [onChange]);
+
+    // Espone i metodi imperativi al componente genitore (es. ChecklistForm)
     useImperativeHandle(
       ref,
       () => ({
@@ -37,11 +81,12 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
           return canvasRef.current.toDataURL("image/png");
         },
         isEmpty: () => !hasSignature,
-        clear: () => clearCanvas(),
+        clear: clearCanvas,
       }),
-      [hasSignature]
+      [hasSignature, clearCanvas]
     );
 
+    // Configura la risoluzione fisica del canvas in base al devicePixelRatio dello schermo
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -67,11 +112,17 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       return () => window.removeEventListener("resize", setupCanvas);
     }, []);
 
+    /**
+     * Normalizza le coordinate del puntatore (mouse o tocco singolo) rispetto al rettangolo del canvas.
+     *
+     * @param e - Evento mouse o touch generato dall'interazione dell'utente.
+     * @returns Coordinate `{ x, y }` relative all'angolo superiore sinistro del canvas.
+     */
     const getCoordinates = (
       e:
         | React.MouseEvent<HTMLCanvasElement>
         | React.TouchEvent<HTMLCanvasElement>
-    ) => {
+    ): { x: number; y: number } => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
@@ -90,6 +141,9 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       };
     };
 
+    /**
+     * Avvia un nuovo tracciato sul canvas al primo tocco o click.
+     */
     const startDrawing = (
       e:
         | React.MouseEvent<HTMLCanvasElement>
@@ -106,6 +160,9 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       ctx.moveTo(x, y);
     };
 
+    /**
+     * Prosegue il disegno del tratto corrente durante il movimento del dito o del mouse.
+     */
     const draw = (
       e:
         | React.MouseEvent<HTMLCanvasElement>
@@ -126,25 +183,15 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       }
     };
 
+    /**
+     * Conclude il tratto corrente ed esporta l'immagine PNG aggiornata verso il callback `onChange`.
+     */
     const stopDrawing = () => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
       const canvas = canvasRef.current;
       if (canvas && onChange) {
         onChange(true, canvas.toDataURL("image/png"));
-      }
-    };
-
-    const clearCanvas = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      setHasSignature(false);
-      if (onChange) {
-        onChange(false, undefined);
       }
     };
 

@@ -1,42 +1,48 @@
 "use client";
 
+/**
+ * @file src/app/page.tsx
+ * @description Schermata iniziale di Login per il mockup PWA "App Marlegno".
+ * Presenta il logo aziendale esteso e un form di autenticazione simulata (email + password)
+ * che smista gli utenti verso la dashboard associata al proprio ruolo RBAC.
+ */
+
 import React, { useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { useAuth, ROLE_ROUTES } from "@/lib/AuthContext";
-import { mockUsers } from "@/mocks/users";
+import { useAuth } from "@/lib/AuthContext";
 
+/**
+ * Pagina principale di accesso (`/`).
+ * Gestisce lo stato locale degli input credenziali e invoca il metodo `login` di `AuthContext`.
+ *
+ * @returns Elemento JSX della pagina di login.
+ */
 export default function HomePage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
-  const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  /**
+   * Gestisce l'invio del form verificando le credenziali tramite `AuthContext.login`.
+   * Se le credenziali non corrispondono a nessun profilo in `mockUsers`, mostra un messaggio d'errore.
+   *
+   * @param e - Evento di submit del form HTML.
+   */
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const matchedUser = mockUsers.find(
-      (u) =>
-        u.email.toLowerCase() === normalizedEmail && u.password === password
-    );
-
-    if (!matchedUser) {
+    const authenticatedUser = login(email, password);
+    if (!authenticatedUser) {
       setError("Credenziali non valide. Controlla email e password.");
-      return;
     }
-
-    // Aggiorna AuthContext + localStorage e reindirizza con useRouter
-    login(matchedUser.email, matchedUser.password ?? "");
-    router.push(ROLE_ROUTES[matchedUser.role]);
   };
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-sm space-y-10">
-        {/* Logo Esteso Marlegno */}
+        {/* Logo Esteso Ufficiale Marlegno */}
         <div className="flex flex-col items-center space-y-3 text-center">
           <Image
             src="/assets/Marlegno.webp"
@@ -51,9 +57,9 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Form di Login Simulato */}
+        {/* Form di Login Simulato RBAC */}
         <form
-          onSubmit={handleSubmit}
+          onSubmit={handleLogin}
           className="space-y-5 rounded-super bg-surface p-6 shadow-sm"
           noValidate
         >

@@ -1,9 +1,19 @@
 "use client";
 
+/**
+ * @file src/app/(admin)/utenze/page.tsx
+ * @description Pannello di amministrazione utenze e ruoli dedicato al profilo `ADMIN` (`/utenze`).
+ */
+
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { ShieldCheck, LogOut } from "lucide-react";
 
+/**
+ * Pagina di gestione utenze e configurazione RBAC per l'Amministratore di Sistema.
+ *
+ * @returns Elemento JSX della vista Admin.
+ */
 export default function AdminUtenzePage() {
   const { user, logout } = useAuth();
 

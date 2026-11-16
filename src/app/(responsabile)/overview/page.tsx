@@ -1,9 +1,19 @@
 "use client";
 
+/**
+ * @file src/app/(responsabile)/overview/page.tsx
+ * @description Vista direzionale di supervisione dedicata al ruolo `RESPONSABILE` (`/overview`).
+ */
+
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Briefcase, LogOut } from "lucide-react";
 
+/**
+ * Pagina principale di overview per il Responsabile di commessa/sicurezza.
+ *
+ * @returns Elemento JSX della vista Responsabile.
+ */
 export default function ResponsabileOverviewPage() {
   const { user, logout } = useAuth();
 

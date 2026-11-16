@@ -1,14 +1,34 @@
+/**
+ * @file src/components/ui/Button.tsx
+ * @description Componente atomico riutilizzabile per i pulsanti di "App Marlegno".
+ * Implementa di default il Design System aziendale (verde `#063D37`, angoli arrotondati Apple-like e feedback tattile `active:scale-95`).
+ */
+
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Proprietà supportate dal componente `Button`.
+ */
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  /** Variante cromatica del pulsante (`"primary"` default verde Marlegno). */
   variant?: "primary" | "secondary" | "outline" | "ghost";
+  /** Dimensione verticale e spaziatura orizzontale touch-friendly. */
   size?: "sm" | "md" | "lg";
+  /** Forma del bordo arrotondato (`"pill"` per `rounded-full`, `"super"` per `rounded-2xl`). */
   shape?: "pill" | "super";
+  /** Se `true`, espande il pulsante al 100% della larghezza del contenitore padre. */
   fullWidth?: boolean;
 }
 
+/**
+ * Componente pulsante accessibile e touch-friendly con supporto `ref`.
+ *
+ * @param props - Configurazione visiva, attributi HTML nativi del bottone e contenuto figlio.
+ * @param ref - Riferimento inoltrato all'elemento DOM `<button>`.
+ * @returns Elemento JSX `<button>` stilizzato.
+ */
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {

@@ -1,0 +1,10 @@
+# Regole di Sviluppo e Standard Architetturali — App Marlegno
+
+Da questo momento in poi, ogni nuovo componente, funzione, type o modulo aggiunto al progetto App Marlegno MUST essere documentato rigorosamente con JSDoc. Il codice deve essere auto-esplicativo, pulito e privo di import inutilizzati.
+
+## Linee Guida Obbligatorie
+1. **Header JSDoc di File**: Ogni file `.ts` o `.tsx` in `src/` deve iniziare con un blocco JSDoc (`@file`, `@description`) che ne descriva chiaramente la responsabilità architetturale.
+2. **Interfacce e Tipi (`src/types/`)**: Ogni tipo, interfaccia e proprietà deve avere il proprio commento JSDoc descrittivo.
+3. **Componenti, Hook e Funzioni**: Ogni componente React, custom hook o funzione helper deve essere preceduto da un blocco JSDoc completo di `@param` e `@returns`.
+4. **Commenti Inline Logici**: I blocchi algoritmici o di calcolo (es. coordinate PDF, stato canvas, sincronizzazione `localStorage`, filtri dati) devono includere commenti inline puntuali.
+5. **Zero Dead Code**: Nessun import inutilizzato, variabile orfana, `console.log` di debug o blocco di codice commentato deve essere committato nel repository.

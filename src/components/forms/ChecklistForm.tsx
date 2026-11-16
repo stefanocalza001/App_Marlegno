@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * @file src/components/forms/ChecklistForm.tsx
+ * @description Modulo principale per la compilazione e l'aggiornamento della Checklist di Sicurezza Cantiere.
+ * Gestisce lo stato reattivo di tutte le sezioni di verifica, l'acquisizione delle firme digitali e
+ * la generazione client-side del report PDF con layout a "isole supercerchio" tramite `jspdf` e `jspdf-autotable`.
+ */
+
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jsPDF } from "jspdf";
@@ -22,18 +29,30 @@ import {
   UserCheck,
 } from "lucide-react";
 
+/**
+ * Valori ammessi per l'esito di ciascun punto di verifica della checklist.
+ */
 export type EsitoVoce =
   | "Da verificare"
   | "Conforme"
   | "Non conforme"
   | "N/A";
 
+/**
+ * Struttura statica di una sezione della Checklist di Sicurezza.
+ */
 export interface ChecklistSectionDef {
+  /** Identificativo univoco della sezione (es. `"sec-1"`). */
   id: string;
+  /** Titolo numerato mostrato nell'header della card e nel PDF. */
   title: string;
+  /** Elenco testuale dei punti di verifica appartenenti alla sezione. */
   items: string[];
 }
 
+/**
+ * Costante contenente le 6 sezioni ufficiali e i relativi punti di controllo per i cantieri Marlegno.
+ */
 export const SECTIONS: ChecklistSectionDef[] = [
   {
     id: "sec-1",
@@ -91,17 +110,20 @@ export const SECTIONS: ChecklistSectionDef[] = [
   },
 ];
 
+/** Stato di compilazione di una singola voce di controllo. */
 interface ItemState {
   esito: EsitoVoce;
   nota: string;
 }
 
+/** Stato complessivo di una singola sezione della checklist. */
 interface SectionState {
   nonPresente: boolean;
   osservazioni: string;
   items: Record<number, ItemState>;
 }
 
+/** Stato globale del modulo ChecklistForm. */
 interface ChecklistFormState {
   sections: Record<string, SectionState>;
   esitoComplessivo: string;
@@ -111,6 +133,7 @@ interface ChecklistFormState {
   impresaSignatureDataUrl?: string;
 }
 
+/** Opzioni selezionabili nel menu a tendina di ogni singolo punto di verifica. */
 const ESITO_OPTIONS: EsitoVoce[] = [
   "Da verificare",
   "Conforme",
@@ -118,6 +141,7 @@ const ESITO_OPTIONS: EsitoVoce[] = [
   "N/A",
 ];
 
+/** Opzioni selezionabili per l'esito complessivo finale del sopralluogo. */
 const ESITO_COMPLESSIVO_OPTIONS = [
   "Regolare",
   "Regolare con prescrizioni",
@@ -125,7 +149,14 @@ const ESITO_COMPLESSIVO_OPTIONS = [
 ];
 
 /**
- * Helper per disegnare rettangoli arrotondati ("supercerchi") in jsPDF
+ * Disegna un contenitore ad angoli arrotondati ("supercerchio") sul documento `jsPDF`.
+ *
+ * @param doc - Istanza attiva di `jsPDF`.
+ * @param x - Coordinata orizzontale superiore sinistra in mm.
+ * @param y - Coordinata verticale superiore sinistra in mm.
+ * @param width - Larghezza del rettangolo in mm.
+ * @param height - Altezza del rettangolo in mm.
+ * @param options - Parametri opzionali di stile (colore di riempimento, colore bordo, raggio e spessore linea).
  */
 function drawSuperRect(
   doc: jsPDF,
@@ -139,7 +170,7 @@ function drawSuperRect(
     radius?: number;
     lineWidth?: number;
   }
-) {
+): void {
   const fill = options?.fillColor ?? [248, 250, 249]; // Default #f8faf9
   const stroke = options?.strokeColor;
   const radius = options?.radius ?? 4;
@@ -157,8 +188,12 @@ function drawSuperRect(
 }
 
 /**
- * Calcola in anticipo l'altezza esatta che occuperà una tabella autoTable
- * così da disegnare prima il box supercerchio di sfondo #f8faf9.
+ * Simula il rendering di una tabella `autoTable` su un documento `jsPDF` temporaneo in memoria
+ * per calcolarne preventivamente l'altezza esatta in millimetri.
+ * Questo permette di disegnare il box "isola supercerchio" `#f8faf9` dietro la tabella con altezza perfetta.
+ *
+ * @param tableOptions - Configurazione `UserOptions` della tabella `autoTable`.
+ * @returns Altezza verticale totale occupata dalla tabella in mm.
  */
 function measureAutoTableHeight(tableOptions: UserOptions): number {
   const scratchDoc = new jsPDF({
@@ -173,11 +208,56 @@ function measureAutoTableHeight(tableOptions: UserOptions): number {
   return finalY - 20;
 }
 
+/**
+ * Estrae la coordinata verticale `finalY` dell'ultima tabella disegnata da `jspdf-autotable`.
+ *
+ * @param doc - Istanza `jsPDF` su cui è stata appena eseguita `autoTable`.
+ * @param fallbackY - Valore di fallback in mm qualora `lastAutoTable` non sia definito.
+ * @returns Coordinata verticale `Y` finale in mm.
+ */
+function getLastAutoTableFinalY(doc: jsPDF, fallbackY: number): number {
+  return (
+    (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+      ?.finalY ?? fallbackY
+  );
+}
+
+/**
+ * Restituisce le classi cromatiche Tailwind CSS per la `<select>` dell'esito in base al valore selezionato.
+ *
+ * @param esito - Valore corrente dell'esito (`"Conforme"`, `"Non conforme"`, `"N/A"`, `"Da verificare"`).
+ * @returns Stringa di classi Tailwind CSS per bordo, sfondo e testo.
+ */
+function getSelectColorClasses(esito: EsitoVoce): string {
+  switch (esito) {
+    case "Conforme":
+      return "border-emerald-300 bg-emerald-50/70 text-emerald-900";
+    case "Non conforme":
+      return "border-rose-300 bg-rose-50/70 text-rose-900";
+    case "N/A":
+      return "border-slate-200 bg-slate-100 text-slate-600";
+    default:
+      return "border-amber-300 bg-amber-50/70 text-amber-900";
+  }
+}
+
+/**
+ * Proprietà in ingresso per il componente `ChecklistForm`.
+ */
 interface ChecklistFormProps {
+  /** Oggetto anagrafico del cantiere a cui si riferisce la checklist. */
   cantiere: Cantiere;
+  /** Se `true`, inizializza il form in modalità "Aggiornamento Checklist" pre-impostando gli esiti pregressi. */
   isUpdate?: boolean;
 }
 
+/**
+ * Form completo a scorrimento singolo per la compilazione della Checklist di Sicurezza Cantiere
+ * e la generazione del relativo report PDF certificato.
+ *
+ * @param props - Oggetto `cantiere` e flag opzionale `isUpdate`.
+ * @returns Elemento JSX del form checklist con barra di salvataggio fissa.
+ */
 export function ChecklistForm({
   cantiere,
   isUpdate = false,
@@ -194,6 +274,7 @@ export function ChecklistForm({
     year: "numeric",
   });
 
+  // Inizializzazione differenziata dello stato in base alla modalità (Prima Compilazione vs Aggiornamento)
   const [formData, setFormData] = useState<ChecklistFormState>(() => {
     const initialSections: Record<string, SectionState> = {};
 
@@ -202,6 +283,7 @@ export function ChecklistForm({
 
       sec.items.forEach((_, idx) => {
         if (isUpdate) {
+          // Simula il caricamento degli esiti già verificati nella revisione precedente
           const isPrechecked = secIdx < 4 || idx === 0;
           initialItems[idx] = {
             esito: isPrechecked ? "Conforme" : "Da verificare",
@@ -231,6 +313,9 @@ export function ChecklistForm({
     };
   });
 
+  /**
+   * Abilita o disabilita un'intera sezione ("Non presente in cantiere").
+   */
   const handleToggleSection = (sectionId: string, nonPresente: boolean) => {
     setFormData((prev) => ({
       ...prev,
@@ -244,6 +329,9 @@ export function ChecklistForm({
     }));
   };
 
+  /**
+   * Aggiorna il campo `esito` o `nota` di un singolo punto di controllo all'interno di una sezione.
+   */
   const handleItemChange = (
     sectionId: string,
     itemIndex: number,
@@ -268,6 +356,9 @@ export function ChecklistForm({
     }));
   };
 
+  /**
+   * Aggiorna il campo testuale delle osservazioni generali di una specifica sezione.
+   */
   const handleSectionOsservazioni = (sectionId: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -281,19 +372,19 @@ export function ChecklistForm({
     }));
   };
 
-  const getLastAutoTableFinalY = (doc: jsPDF, fallbackY: number): number => {
-    return (
-      (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-        ?.finalY ?? fallbackY
-    );
-  };
-
+  /**
+   * Salva i dati della checklist in `localStorage`, genera lato client il documento PDF A4
+   * con layout a "isole supercerchio", avvia il download e reindirizza a `/cantiere/[id]`.
+   *
+   * @param e - Evento di submit del form HTML.
+   */
   const generatePDF = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isGeneratingPdf) return;
 
     setIsGeneratingPdf(true);
 
+    // Acquisisce data e ora esatte del momento di conferma e generazione del documento
     const now = new Date();
     const dataOggi = now.toLocaleDateString("it-IT", {
       day: "2-digit",
@@ -311,6 +402,7 @@ export function ChecklistForm({
       formData.impresaSignatureDataUrl ??
       null;
 
+    // Persistenza simulata in localStorage per supporto offline
     try {
       window.localStorage.setItem(
         `marlegno_checklist_${cantiere.id}`,
@@ -326,10 +418,11 @@ export function ChecklistForm({
         })
       );
     } catch {
-      // Ignora errori localStorage
+      // Ignora errori di quota o accesso a localStorage
     }
 
     try {
+      // Breve pausa per consentire il rendering dello stato di caricamento (Loader2) sul pulsante
       await new Promise((resolve) => setTimeout(resolve, 450));
 
       const doc = new jsPDF({
@@ -389,7 +482,7 @@ export function ChecklistForm({
 
       let currentY = 54;
 
-      // 3. Layout Sezioni a Isole (#f8faf9) senza header verdi pesanti
+      // 3. Layout Sezioni a Isole (#f8faf9): calcola l'altezza, disegna il supercerchio e poi la tabella interna
       for (const section of SECTIONS) {
         const secState = formData.sections[section.id];
         if (secState.nonPresente) {
@@ -441,6 +534,7 @@ export function ChecklistForm({
           head: [["Punto di controllo", "Esito", "Note"]],
           body: sectionRows,
           didParseCell: (data) => {
+            // Applica i colori semantici esclusivamente al testo della colonna "Esito"
             if (data.section === "body" && data.column.index === 1) {
               const esitoValue = String(data.cell.raw ?? "");
               if (esitoValue === "Conforme") {
@@ -460,25 +554,23 @@ export function ChecklistForm({
         const measuredTableHeight = measureAutoTableHeight(tableConfig);
         const cardHeight = 11 + measuredTableHeight + 3;
 
+        // Salto pagina preventivo se l'isola della sezione non entra nello spazio residuo del foglio A4
         if (currentY + cardHeight > 278) {
           doc.addPage();
           currentY = 16;
         }
 
-        // Disegna prima il box di sfondo #f8faf9 con bordo sottile e angoli supercerchio
         drawSuperRect(doc, 14, currentY, 182, cardHeight, {
           fillColor: [248, 250, 249],
           strokeColor: [220, 228, 224],
           radius: 4,
         });
 
-        // Titolo della sezione in alto a sinistra dentro il box
         doc.setTextColor(30, 77, 59);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
         doc.text(section.title, 17.5, currentY + 7);
 
-        // Renderizza la tabella all'interno dell'isola supercerchio
         autoTable(doc, {
           ...tableConfig,
           startY: currentY + 9.5,
@@ -564,46 +656,41 @@ export function ChecklistForm({
 
       currentY = getLastAutoTableFinalY(doc, currentY + summaryCardHeight) + 8;
 
-      // 5. Box Firme Certificati (Supercerchi con sfondo bianco/grigio e timestamp interno)
+      // 5. Box Firme Certificati (Supercerchi affiancati con timestamp e geolocalizzazione nominale)
       const signBoxHeight = 42;
       if (currentY + signBoxHeight > 282) {
         doc.addPage();
         currentY = 18;
       }
 
-      // Supercerchio Sinistro: Firma Tecnico
       drawSuperRect(doc, 14, currentY, 88, signBoxHeight, {
         fillColor: [248, 250, 249],
         strokeColor: [215, 224, 220],
         radius: 4,
       });
 
-      // Supercerchio Destro: Firma Impresa
       drawSuperRect(doc, 108, currentY, 88, signBoxHeight, {
         fillColor: [248, 250, 249],
         strokeColor: [215, 224, 220],
         radius: 4,
       });
 
-      // Intestazioni interne dei due box firma
       doc.setTextColor(30, 77, 59);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.text("Firma Tecnico Rilevatore", 18, currentY + 6.5);
       doc.text("Firma Impresa Esecutrice", 112, currentY + 6.5);
 
-      // Nome / Firma Tecnico
       doc.setFont("times", "italic");
       doc.setFontSize(14);
       doc.setTextColor(30, 77, 59);
       doc.text(tecnicoNome, 58, currentY + 19, { align: "center" });
 
-      // Immagine Firma Impresa dal SignaturePad
       if (signatureBase64) {
         try {
           doc.addImage(signatureBase64, "PNG", 114, currentY + 8.5, 76, 17);
         } catch {
-          // Ignora eventuale immagine non valida
+          // Ignora eventuale immagine corrotta o vuota
         }
       } else {
         doc.setFont("helvetica", "normal");
@@ -614,13 +701,11 @@ export function ChecklistForm({
         });
       }
 
-      // Linea divisoria sottile sopra i metadati di certificazione firma
       doc.setDrawColor(226, 232, 240);
       doc.setLineWidth(0.2);
       doc.line(18, currentY + 27.5, 98, currentY + 27.5);
       doc.line(112, currentY + 27.5, 192, currentY + 27.5);
 
-      // Luogo, Data e Ora correnti in font piccolo e grigio sotto il nome
       const locationText = `Firmato a: ${cantiere.nome} (${cantiere.indirizzo})`;
       const timestampText = `Il ${dataOggi} alle ${oraOggi}`;
 
@@ -628,15 +713,13 @@ export function ChecklistForm({
       doc.setFontSize(7);
       doc.setTextColor(100, 116, 139);
 
-      // Metadati Box Tecnico
       doc.text(locationText, 18, currentY + 32, { maxWidth: 80 });
       doc.text(timestampText, 18, currentY + 38.5);
 
-      // Metadati Box Impresa
       doc.text(locationText, 112, currentY + 32, { maxWidth: 80 });
       doc.text(timestampText, 112, currentY + 38.5);
 
-      // 6. Salvataggio PDF e Redirect al Cantiere
+      // 6. Download del PDF e redirect automatico alla vista del cantiere
       doc.save("Checklist_Cantiere_Modern.pdf");
 
       setShowToast(true);
@@ -645,19 +728,6 @@ export function ChecklistForm({
       }, 900);
     } catch {
       setIsGeneratingPdf(false);
-    }
-  };
-
-  const getSelectColorClasses = (esito: EsitoVoce) => {
-    switch (esito) {
-      case "Conforme":
-        return "border-emerald-300 bg-emerald-50/70 text-emerald-900";
-      case "Non conforme":
-        return "border-rose-300 bg-rose-50/70 text-rose-900";
-      case "N/A":
-        return "border-slate-200 bg-slate-100 text-slate-600";
-      default:
-        return "border-amber-300 bg-amber-50/70 text-amber-900";
     }
   };
 

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * @file src/app/(cantiere)/cantiere/[id]/page.tsx
+ * @description Pagina di dettaglio operativo del singolo cantiere (`/cantiere/[id]`).
+ * Espone i 3 modelli documentali compilabili dal Geometra (Checklist Cantiere, Verbale Sicurezza, Verbale Qualità)
+ * adattando dinamicamente la rotta della Checklist in base allo stato di prima compilazione o aggiornamento.
+ */
+
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -14,12 +21,19 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+/**
+ * Contenuto principale della vista di dettaglio cantiere.
+ * Recupera il cantiere tramite parametro dinamico `id` e gestisce il toast di conferma post-salvataggio PDF (`?saved=1`).
+ *
+ * @returns Elemento JSX con intestazione cantiere e pulsanti dei modelli documentali.
+ */
 function CantiereDetailContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showSavedToast, setShowSavedToast] = useState(false);
 
+  // Mostra il toast di conferma per 3.5 secondi al ritorno dalla generazione PDF
   useEffect(() => {
     if (searchParams.get("saved") === "1") {
       setShowSavedToast(true);
@@ -51,6 +65,7 @@ function CantiereDetailContent() {
     );
   }
 
+  // Determina etichetta e query parameter in base alla presenza di revisioni precedenti della checklist
   const checklistSubtitle = cantiere.checklistCompilata
     ? "Aggiornamento Checklist"
     : "Prima compilazione";
@@ -166,9 +181,20 @@ function CantiereDetailContent() {
   );
 }
 
+/**
+ * Pagina `/cantiere/[id]` avvolta in un boundary `<Suspense>` per supportare `useSearchParams` in build statica/SSR.
+ *
+ * @returns Elemento JSX della pagina di dettaglio cantiere.
+ */
 export default function CantiereDetailPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-2xl p-6 text-sm text-slate-500">Caricamento cantiere...</div>}>
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-2xl p-6 text-sm text-slate-500">
+          Caricamento cantiere...
+        </div>
+      }
+    >
       <CantiereDetailContent />
     </Suspense>
   );
