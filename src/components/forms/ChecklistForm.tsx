@@ -3,7 +3,7 @@
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import autoTable, { UserOptions } from "jspdf-autotable";
 import { Cantiere } from "@/types";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -123,6 +123,55 @@ const ESITO_COMPLESSIVO_OPTIONS = [
   "Regolare con prescrizioni",
   "Non regolare - Diffida / Sospensione",
 ];
+
+/**
+ * Helper per disegnare rettangoli arrotondati ("supercerchi") in jsPDF
+ */
+function drawSuperRect(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  options?: {
+    fillColor?: [number, number, number];
+    strokeColor?: [number, number, number];
+    radius?: number;
+    lineWidth?: number;
+  }
+) {
+  const fill = options?.fillColor ?? [248, 250, 249]; // Default #f8faf9
+  const stroke = options?.strokeColor;
+  const radius = options?.radius ?? 4;
+  const lineWidth = options?.lineWidth ?? 0.3;
+
+  doc.setFillColor(fill[0], fill[1], fill[2]);
+
+  if (stroke) {
+    doc.setDrawColor(stroke[0], stroke[1], stroke[2]);
+    doc.setLineWidth(lineWidth);
+    doc.roundedRect(x, y, width, height, radius, radius, "FD");
+  } else {
+    doc.roundedRect(x, y, width, height, radius, radius, "F");
+  }
+}
+
+/**
+ * Calcola in anticipo l'altezza esatta che occuperà una tabella autoTable
+ * così da disegnare prima il box supercerchio di sfondo #f8faf9.
+ */
+function measureAutoTableHeight(tableOptions: UserOptions): number {
+  const scratchDoc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+  autoTable(scratchDoc, { ...tableOptions, startY: 20 });
+  const finalY =
+    (scratchDoc as unknown as { lastAutoTable?: { finalY: number } })
+      .lastAutoTable?.finalY ?? 40;
+  return finalY - 20;
+}
 
 interface ChecklistFormProps {
   cantiere: Cantiere;
@@ -245,7 +294,6 @@ export function ChecklistForm({
 
     setIsGeneratingPdf(true);
 
-    // Timestamp esatto del click su "Salva e Genera PDF"
     const now = new Date();
     const dataOggi = now.toLocaleDateString("it-IT", {
       day: "2-digit",
@@ -290,80 +338,63 @@ export function ChecklistForm({
         format: "a4",
       });
 
-      // 1. Header Principale del Documento con doc.rect() (#1e4d3b -> RGB [30, 77, 59])
-      doc.setFillColor(30, 77, 59);
-      doc.rect(0, 0, 210, 24, "F");
-
+      // 1. Header Principale: Unico box verde scuro (#1e4d3b -> RGB [30, 77, 59]) in stile supercerchio
+      drawSuperRect(doc, 14, 10, 182, 16, {
+        fillColor: [30, 77, 59],
+        radius: 4,
+      });
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(15);
-      doc.text("CHECK LIST SICUREZZA CANTIERE", 14, 15);
+      doc.setFontSize(14);
+      doc.text("CHECK LIST SICUREZZA", 20, 20);
 
-      // 2. Box Metadati Storicizzazione (#F3F4F6)
-      doc.setFillColor(243, 244, 246);
-      doc.setDrawColor(229, 231, 235);
-      doc.setLineWidth(0.3);
-      doc.roundedRect(14, 29, 182, 11, 2.5, 2.5, "FD");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text(
+        isUpdate
+          ? "Aggiornamento Checklist (Rev. 4) • Ultima mod. 12/11/2026"
+          : `Prima Compilazione (Rev. 1) • ${dataOggi}`,
+        190,
+        20,
+        { align: "right" }
+      );
 
-      doc.setTextColor(55, 65, 81);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      if (isUpdate) {
-        doc.text("Aggiornamento Checklist (Revisione 4)", 18, 36);
-        doc.setFont("helvetica", "normal");
-        doc.text("Ultima modifica: 12 Novembre 2026", 192, 36, {
-          align: "right",
-        });
-      } else {
-        doc.text("Prima Compilazione", 18, 36);
-        doc.setFont("helvetica", "normal");
-        doc.text(`Creazione nuova revisione (Rev. 1) • ${dataOggi}`, 192, 36, {
-          align: "right",
-        });
-      }
+      // 2. Isola Supercerchio Dati Cantiere (#f8faf9)
+      drawSuperRect(doc, 14, 30, 182, 19, {
+        fillColor: [248, 250, 249],
+        strokeColor: [222, 230, 226],
+        radius: 4,
+      });
 
-      // 3. Griglia Dati Cantiere (autotable 1-riga senza bordi verticali esterni)
       autoTable(doc, {
-        startY: 44,
+        startY: 31.5,
+        margin: { left: 17, right: 17 },
+        tableWidth: 176,
         theme: "plain",
         styles: {
-          fontSize: 9,
-          cellPadding: 3,
-          textColor: [15, 23, 42],
-          lineColor: [226, 232, 240],
-          lineWidth: { top: 0.2, bottom: 0.2, left: 0, right: 0 },
+          fontSize: 8.5,
+          cellPadding: 2,
+          fillColor: [248, 250, 249],
+          textColor: [30, 41, 59],
         },
         headStyles: {
-          fillColor: [230, 239, 233],
-          textColor: [30, 77, 59],
+          fillColor: [248, 250, 249],
+          textColor: [100, 116, 139],
           fontStyle: "bold",
+          fontSize: 7.5,
         },
-        head: [["Cantiere", "Indirizzo", "Data", "Tecnico"]],
+        head: [["CANTIERE", "INDIRIZZO", "DATA", "TECNICO RILEVATORE"]],
         body: [[cantiere.nome, cantiere.indirizzo, dataOggi, tecnicoNome]],
       });
 
-      let currentY = getLastAutoTableFinalY(doc, 62);
+      let currentY = 54;
 
-      // 4. Intestazioni a Compartimento (doc.rect con RGB [230, 239, 233]) + autoTable per ogni sezione
+      // 3. Layout Sezioni a Isole (#f8faf9) senza header verdi pesanti
       for (const section of SECTIONS) {
         const secState = formData.sections[section.id];
         if (secState.nonPresente) {
           continue;
         }
-
-        currentY += 7;
-        if (currentY > 245) {
-          doc.addPage();
-          currentY = 20;
-        }
-
-        // Rettangolo pieno verde tenue RGB [230, 239, 233] con testo verde scuro RGB [30, 77, 59]
-        doc.setFillColor(230, 239, 233);
-        doc.rect(14, currentY, 182, 8.5, "F");
-        doc.setTextColor(30, 77, 59);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.text(section.title, 17, currentY + 5.8);
 
         const sectionRows: string[][] = section.items.map((itemText, idx) => {
           const itemState = secState.items[idx];
@@ -382,23 +413,30 @@ export function ChecklistForm({
           ]);
         }
 
-        autoTable(doc, {
-          startY: currentY + 8.5,
-          theme: "grid",
+        const tableConfig: UserOptions = {
+          margin: { left: 17, right: 17 },
+          tableWidth: 176,
+          theme: "plain",
           styles: {
             fontSize: 8.5,
-            cellPadding: 2.8,
+            cellPadding: 2.5,
+            fillColor: [248, 250, 249],
             textColor: [30, 41, 59],
+            lineColor: [226, 232, 240],
+            lineWidth: { bottom: 0.15, top: 0, left: 0, right: 0 },
           },
           headStyles: {
-            fillColor: [30, 77, 59],
-            textColor: [255, 255, 255],
+            fillColor: [248, 250, 249],
+            textColor: [100, 116, 139],
             fontStyle: "bold",
+            fontSize: 7.5,
+            lineColor: [203, 213, 225],
+            lineWidth: { bottom: 0.25, top: 0, left: 0, right: 0 },
           },
           columnStyles: {
             0: { cellWidth: 96 },
-            1: { cellWidth: 32, halign: "center" },
-            2: { cellWidth: 54 },
+            1: { cellWidth: 30, halign: "center" },
+            2: { cellWidth: 50 },
           },
           head: [["Punto di controllo", "Esito", "Note"]],
           body: sectionRows,
@@ -417,67 +455,57 @@ export function ChecklistForm({
               }
             }
           },
+        };
+
+        const measuredTableHeight = measureAutoTableHeight(tableConfig);
+        const cardHeight = 11 + measuredTableHeight + 3;
+
+        if (currentY + cardHeight > 278) {
+          doc.addPage();
+          currentY = 16;
+        }
+
+        // Disegna prima il box di sfondo #f8faf9 con bordo sottile e angoli supercerchio
+        drawSuperRect(doc, 14, currentY, 182, cardHeight, {
+          fillColor: [248, 250, 249],
+          strokeColor: [220, 228, 224],
+          radius: 4,
         });
 
-        currentY = getLastAutoTableFinalY(doc, currentY + 32);
+        // Titolo della sezione in alto a sinistra dentro il box
+        doc.setTextColor(30, 77, 59);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(section.title, 17.5, currentY + 7);
+
+        // Renderizza la tabella all'interno dell'isola supercerchio
+        autoTable(doc, {
+          ...tableConfig,
+          startY: currentY + 9.5,
+        });
+
+        currentY = getLastAutoTableFinalY(doc, currentY + cardHeight) + 6;
       }
 
-      // 5. Sezione "Esito Complessivo" con Highlight Colorato Dinamico
-      currentY += 8;
-      if (currentY > 225) {
-        doc.addPage();
-        currentY = 20;
-      }
-
-      // Intestazione compartimento Esito Complessivo
-      doc.setFillColor(230, 239, 233);
-      doc.rect(14, currentY, 182, 8.5, "F");
-      doc.setTextColor(30, 77, 59);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text("Esito Complessivo del Sopralluogo", 17, currentY + 5.8);
-
-      currentY += 10.5;
-
-      // Calcolo colore di highlight per l'Esito Finale
-      const esitoText = formData.esitoComplessivo;
-      const esitoLower = esitoText.toLowerCase();
-      if (
-        esitoLower.includes("non regolare") ||
-        esitoLower.includes("sospensione")
-      ) {
-        doc.setFillColor(204, 0, 0); // Rosso [204, 0, 0]
-      } else if (esitoLower.includes("prescrizioni")) {
-        doc.setFillColor(230, 126, 34); // Arancione per eccezioni/prescrizioni
-      } else if (esitoLower.includes("regolare")) {
-        doc.setFillColor(34, 139, 34); // Verde [34, 139, 34]
-      } else {
-        doc.setFillColor(230, 126, 34); // Arancione fallback
-      }
-
-      doc.rect(14, currentY, 182, 10, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10.5);
-      doc.text(`ESITO FINALE: ${esitoText.toUpperCase()}`, 105, currentY + 6.5, {
-        align: "center",
-      });
-
-      currentY += 11;
-
-      autoTable(doc, {
-        startY: currentY,
-        theme: "grid",
+      // 4. Isola Supercerchio "Esito Complessivo del Sopralluogo"
+      const summaryTableConfig: UserOptions = {
+        margin: { left: 17, right: 17 },
+        tableWidth: 176,
+        theme: "plain",
         styles: {
-          fontSize: 9,
-          cellPadding: 3,
+          fontSize: 8.5,
+          cellPadding: 2.5,
+          fillColor: [248, 250, 249],
           textColor: [30, 41, 59],
+          lineColor: [226, 232, 240],
+          lineWidth: { bottom: 0.15, top: 0, left: 0, right: 0 },
         },
         columnStyles: {
-          0: { cellWidth: 42, fontStyle: "bold", fillColor: [248, 250, 252] },
-          1: { cellWidth: 140 },
+          0: { cellWidth: 42, fontStyle: "bold", textColor: [71, 85, 105] },
+          1: { cellWidth: 134 },
         },
         body: [
+          ["Esito Generale", formData.esitoComplessivo],
           [
             "Prescrizioni",
             formData.prescrizioni.trim() !== ""
@@ -491,38 +519,89 @@ export function ChecklistForm({
               : "-",
           ],
         ],
-      });
+        didParseCell: (data) => {
+          if (
+            data.section === "body" &&
+            data.row.index === 0 &&
+            data.column.index === 1
+          ) {
+            const val = String(data.cell.raw ?? "").toLowerCase();
+            data.cell.styles.fontStyle = "bold";
+            if (val.includes("non regolare") || val.includes("sospensione")) {
+              data.cell.styles.textColor = [204, 0, 0];
+            } else if (val.includes("prescrizioni")) {
+              data.cell.styles.textColor = [230, 126, 34];
+            } else {
+              data.cell.styles.textColor = [34, 139, 34];
+            }
+          }
+        },
+      };
 
-      currentY = getLastAutoTableFinalY(doc, currentY + 22);
+      const summaryTableHeight = measureAutoTableHeight(summaryTableConfig);
+      const summaryCardHeight = 11 + summaryTableHeight + 3;
 
-      // 6. Firme con Timestamp e Geolocalizzazione Nominale Certificata
-      currentY += 10;
-      if (currentY > 225) {
+      if (currentY + summaryCardHeight > 278) {
         doc.addPage();
-        currentY = 20;
+        currentY = 16;
       }
+
+      drawSuperRect(doc, 14, currentY, 182, summaryCardHeight, {
+        fillColor: [248, 250, 249],
+        strokeColor: [220, 228, 224],
+        radius: 4,
+      });
 
       doc.setTextColor(30, 77, 59);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("Firma Tecnico", 14, currentY);
-      doc.text("Firma Impresa", 114, currentY);
+      doc.text("Esito Complessivo del Sopralluogo", 17.5, currentY + 7);
 
-      doc.setDrawColor(203, 213, 225);
-      doc.setFillColor(250, 250, 250);
-      doc.rect(14, currentY + 3, 82, 26, "FD");
-      doc.rect(114, currentY + 3, 82, 26, "FD");
+      autoTable(doc, {
+        ...summaryTableConfig,
+        startY: currentY + 9.5,
+      });
 
-      // Firma Tecnico nel riquadro sinistro
+      currentY = getLastAutoTableFinalY(doc, currentY + summaryCardHeight) + 8;
+
+      // 5. Box Firme Certificati (Supercerchi con sfondo bianco/grigio e timestamp interno)
+      const signBoxHeight = 42;
+      if (currentY + signBoxHeight > 282) {
+        doc.addPage();
+        currentY = 18;
+      }
+
+      // Supercerchio Sinistro: Firma Tecnico
+      drawSuperRect(doc, 14, currentY, 88, signBoxHeight, {
+        fillColor: [248, 250, 249],
+        strokeColor: [215, 224, 220],
+        radius: 4,
+      });
+
+      // Supercerchio Destro: Firma Impresa
+      drawSuperRect(doc, 108, currentY, 88, signBoxHeight, {
+        fillColor: [248, 250, 249],
+        strokeColor: [215, 224, 220],
+        radius: 4,
+      });
+
+      // Intestazioni interne dei due box firma
+      doc.setTextColor(30, 77, 59);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("Firma Tecnico Rilevatore", 18, currentY + 6.5);
+      doc.text("Firma Impresa Esecutrice", 112, currentY + 6.5);
+
+      // Nome / Firma Tecnico
       doc.setFont("times", "italic");
       doc.setFontSize(14);
       doc.setTextColor(30, 77, 59);
-      doc.text(tecnicoNome, 55, currentY + 18, { align: "center" });
+      doc.text(tecnicoNome, 58, currentY + 19, { align: "center" });
 
-      // Firma Impresa dal SignaturePad nel riquadro destro
+      // Immagine Firma Impresa dal SignaturePad
       if (signatureBase64) {
         try {
-          doc.addImage(signatureBase64, "PNG", 117, currentY + 5, 76, 22);
+          doc.addImage(signatureBase64, "PNG", 114, currentY + 8.5, 76, 17);
         } catch {
           // Ignora eventuale immagine non valida
         }
@@ -530,29 +609,34 @@ export function ChecklistForm({
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(148, 163, 184);
-        doc.text("Firma non apposta", 155, currentY + 18, {
+        doc.text("Firma non apposta", 152, currentY + 19, {
           align: "center",
         });
       }
 
-      // Timestamp e Geolocalizzazione Nominale in corsivo sotto entrambi i riquadri firma
-      const metaY = currentY + 33.5;
-      const locationLine = `Firmato a: ${cantiere.nome} (${cantiere.indirizzo})`;
-      const timeLine = `Il ${dataOggi} alle ${oraOggi}`;
+      // Linea divisoria sottile sopra i metadati di certificazione firma
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.2);
+      doc.line(18, currentY + 27.5, 98, currentY + 27.5);
+      doc.line(112, currentY + 27.5, 192, currentY + 27.5);
 
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(7.5);
+      // Luogo, Data e Ora correnti in font piccolo e grigio sotto il nome
+      const locationText = `Firmato a: ${cantiere.nome} (${cantiere.indirizzo})`;
+      const timestampText = `Il ${dataOggi} alle ${oraOggi}`;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
       doc.setTextColor(100, 116, 139);
 
-      // Sotto Firma Tecnico (sinistra)
-      doc.text(locationLine, 14, metaY, { maxWidth: 82 });
-      doc.text(timeLine, 14, metaY + 6.5);
+      // Metadati Box Tecnico
+      doc.text(locationText, 18, currentY + 32, { maxWidth: 80 });
+      doc.text(timestampText, 18, currentY + 38.5);
 
-      // Sotto Firma Impresa (destra)
-      doc.text(locationLine, 114, metaY, { maxWidth: 82 });
-      doc.text(timeLine, 114, metaY + 6.5);
+      // Metadati Box Impresa
+      doc.text(locationText, 112, currentY + 32, { maxWidth: 80 });
+      doc.text(timestampText, 112, currentY + 38.5);
 
-      // 7. Salvataggio PDF e Redirect verso /cantiere/[id]
+      // 6. Salvataggio PDF e Redirect al Cantiere
       doc.save("Checklist_Cantiere_Modern.pdf");
 
       setShowToast(true);
