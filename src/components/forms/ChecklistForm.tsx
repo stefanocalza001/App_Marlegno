@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Cantiere } from "@/types";
 import { useAuth } from "@/lib/AuthContext";
-import { SignaturePad } from "@/components/ui/SignaturePad";
+import {
+  SignaturePad,
+  SignaturePadHandle,
+} from "@/components/ui/SignaturePad";
 import {
   Building2,
   Calendar,
@@ -132,6 +135,7 @@ export function ChecklistForm({
 }: ChecklistFormProps) {
   const { user } = useAuth();
   const router = useRouter();
+  const signaturePadRef = useRef<SignaturePadHandle | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showToast, setShowToast] = useState(false);
 
@@ -228,12 +232,23 @@ export function ChecklistForm({
     }));
   };
 
+  const getLastAutoTableFinalY = (doc: jsPDF, fallbackY: number): number => {
+    return (
+      (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+        ?.finalY ?? fallbackY
+    );
+  };
+
   const generatePDF = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isGeneratingPdf) return;
 
     setIsGeneratingPdf(true);
     const tecnicoNome = user?.name ?? "Mario Rossi";
+    const signatureBase64 =
+      signaturePadRef.current?.getDataURL() ??
+      formData.impresaSignatureDataUrl ??
+      null;
 
     try {
       window.localStorage.setItem(
@@ -245,6 +260,7 @@ export function ChecklistForm({
           dataCompilazione: todayFormatted,
           tecnico: tecnicoNome,
           ...formData,
+          impresaSignatureDataUrl: signatureBase64 ?? undefined,
         })
       );
     } catch {
@@ -260,111 +276,167 @@ export function ChecklistForm({
         format: "a4",
       });
 
-      // 1. Intestazione stilizzata verde scuro #1e4d3b (RGB: 30, 77, 59)
-      doc.setTextColor(30, 77, 59);
+      // 1. Header Rettangolo Verde Scuro (#1e4d3b -> RGB: 30, 77, 59)
+      doc.setFillColor(30, 77, 59);
+      doc.rect(0, 0, 210, 24, "F");
+
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(18);
-      doc.text("MARLEGNO", 14, 16);
+      doc.setFontSize(15);
+      doc.text("CHECK LIST SICUREZZA CANTIERE", 14, 15);
 
-      doc.setFontSize(14);
-      doc.text("CHECK LIST SICUREZZA CANTIERE", 14, 24);
-
-      doc.setDrawColor(30, 77, 59);
-      doc.setLineWidth(0.6);
-      doc.line(14, 27, 196, 27);
-
-      // 2. Riquadro Dati del Cantiere (Nome, Indirizzo, Data, Tecnico)
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(203, 213, 225);
+      // 2. Box Metadati Grigio Chiaro (#F3F4F6 -> RGB: 243, 244, 246) con angoli smussati
+      doc.setFillColor(243, 244, 246);
+      doc.setDrawColor(229, 231, 235);
       doc.setLineWidth(0.3);
-      doc.roundedRect(14, 31, 182, 22, 2, 2, "FD");
+      doc.roundedRect(14, 29, 182, 11, 2.5, 2.5, "FD");
 
-      doc.setTextColor(15, 23, 42);
+      doc.setTextColor(55, 65, 81);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9.5);
-      doc.text("Cantiere:", 18, 38);
-      doc.text("Indirizzo:", 18, 46);
-      doc.text("Data:", 125, 38);
-      doc.text("Tecnico:", 125, 46);
-
-      doc.setFont("helvetica", "normal");
-      doc.text(cantiere.nome, 38, 38);
-      doc.text(cantiere.indirizzo, 38, 46);
-      doc.text(todayFormatted, 143, 38);
-      doc.text(tecnicoNome, 143, 46);
-
-      // 3. Tabella Dati (autotable) con colonne: Punto di controllo | Esito | Note
-      const tableBody: string[][] = [];
-
-      for (const section of SECTIONS) {
-        const secState = formData.sections[section.id];
-
-        if (secState.nonPresente) {
-          tableBody.push([
-            `${section.title} (Non presente in cantiere)`,
-            "N/A",
-            "Sezione non presente in cantiere",
-          ]);
-        } else {
-          section.items.forEach((itemText, idx) => {
-            const itemState = secState.items[idx];
-            tableBody.push([
-              `${section.title} — ${itemText}`,
-              itemState.esito,
-              itemState.nota.trim() !== "" ? itemState.nota.trim() : "-",
-            ]);
-          });
-
-          if (secState.osservazioni.trim() !== "") {
-            tableBody.push([
-              `${section.title} — Osservazioni di sezione`,
-              "Nota",
-              secState.osservazioni.trim(),
-            ]);
-          }
-        }
+      if (isUpdate) {
+        doc.text("Aggiornamento Checklist (Revisione 4)", 18, 36);
+        doc.setFont("helvetica", "normal");
+        doc.text("Ultima modifica: 12 Novembre 2026", 192, 36, {
+          align: "right",
+        });
+      } else {
+        doc.text("Prima Compilazione", 18, 36);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Creazione nuova revisione (Rev. 1) • ${todayFormatted}`, 192, 36, {
+          align: "right",
+        });
       }
 
+      // 3. Griglia Dati Cantiere (autotable 1-riga senza bordi verticali esterni)
       autoTable(doc, {
-        startY: 58,
-        theme: "grid",
+        startY: 44,
+        theme: "plain",
         styles: {
-          fontSize: 8.5,
-          cellPadding: 2.8,
-          textColor: [30, 41, 59],
+          fontSize: 9,
+          cellPadding: 3,
+          textColor: [15, 23, 42],
+          lineColor: [226, 232, 240],
+          lineWidth: { top: 0.2, bottom: 0.2, left: 0, right: 0 },
         },
         headStyles: {
-          fillColor: [30, 77, 59], // #1e4d3b
-          textColor: [255, 255, 255],
+          fillColor: [232, 245, 238], // Background verdino leggero
+          textColor: [30, 77, 59], // Testo verde scuro #1e4d3b
           fontStyle: "bold",
         },
-        columnStyles: {
-          0: { cellWidth: 104 },
-          1: { cellWidth: 32, halign: "center" },
-          2: { cellWidth: 46 },
-        },
-        head: [["Punto di controllo", "Esito", "Note"]],
-        body: tableBody,
-        didParseCell: (data) => {
-          if (data.section === "body" && data.column.index === 1) {
-            const esitoValue = String(data.cell.raw ?? "");
-            if (esitoValue === "Conforme") {
-              data.cell.styles.textColor = [30, 77, 59]; // Verde #1e4d3b
-              data.cell.styles.fontStyle = "bold";
-            } else if (esitoValue === "Non conforme") {
-              data.cell.styles.textColor = [204, 0, 0]; // Rosso #cc0000
-              data.cell.styles.fontStyle = "bold";
-            }
-          }
-        },
+        head: [["Cantiere", "Indirizzo", "Data", "Tecnico"]],
+        body: [[cantiere.nome, cantiere.indirizzo, todayFormatted, tecnicoNome]],
       });
 
-      let currentY =
-        (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-          ?.finalY ?? 180;
+      let currentY = getLastAutoTableFinalY(doc, 62);
 
-      // 4. Esito Complessivo e Prescrizioni
-      currentY += 8;
+      // 4. Tabelle delle Sezioni (una tabella autotable per ogni sezione abilitata)
+      for (const section of SECTIONS) {
+        const secState = formData.sections[section.id];
+        if (secState.nonPresente) {
+          continue;
+        }
+
+        currentY += 6;
+        if (currentY > 250) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        const sectionRows: string[][] = section.items.map((itemText, idx) => {
+          const itemState = secState.items[idx];
+          return [
+            itemText,
+            itemState.esito,
+            itemState.nota.trim() !== "" ? itemState.nota.trim() : "-",
+          ];
+        });
+
+        if (secState.osservazioni.trim() !== "") {
+          sectionRows.push([
+            "Osservazioni di sezione",
+            "N/A",
+            secState.osservazioni.trim(),
+          ]);
+        }
+
+        autoTable(doc, {
+          startY: currentY,
+          theme: "grid",
+          styles: {
+            fontSize: 8.5,
+            cellPadding: 2.8,
+            textColor: [30, 41, 59],
+          },
+          head: [
+            [
+              {
+                content: section.title,
+                colSpan: 3,
+                styles: {
+                  fillColor: [30, 77, 59], // #1e4d3b
+                  textColor: [255, 255, 255],
+                  fontStyle: "bold",
+                  fontSize: 9.5,
+                },
+              },
+            ],
+            [
+              {
+                content: "Punto di controllo",
+                styles: {
+                  fillColor: [241, 245, 249],
+                  textColor: [30, 77, 59],
+                  fontStyle: "bold",
+                },
+              },
+              {
+                content: "Esito",
+                styles: {
+                  fillColor: [241, 245, 249],
+                  textColor: [30, 77, 59],
+                  fontStyle: "bold",
+                  halign: "center",
+                },
+              },
+              {
+                content: "Note",
+                styles: {
+                  fillColor: [241, 245, 249],
+                  textColor: [30, 77, 59],
+                  fontStyle: "bold",
+                },
+              },
+            ],
+          ],
+          columnStyles: {
+            0: { cellWidth: 96 }, // Punto di controllo (larga)
+            1: { cellWidth: 32, halign: "center" }, // Esito (stretta al centro)
+            2: { cellWidth: 54 }, // Note (larga)
+          },
+          body: sectionRows,
+          didParseCell: (data) => {
+            if (data.section === "body" && data.column.index === 1) {
+              const esitoValue = String(data.cell.raw ?? "");
+              if (esitoValue === "Conforme") {
+                data.cell.styles.textColor = [34, 139, 34]; // Verde
+                data.cell.styles.fontStyle = "bold";
+              } else if (esitoValue === "Non conforme") {
+                data.cell.styles.textColor = [204, 0, 0]; // Rosso
+                data.cell.styles.fontStyle = "bold";
+              } else if (esitoValue === "Da verificare") {
+                data.cell.styles.textColor = [230, 126, 34]; // Arancione
+                data.cell.styles.fontStyle = "bold";
+              }
+            }
+          },
+        });
+
+        currentY = getLastAutoTableFinalY(doc, currentY + 25);
+      }
+
+      // 5. Tabella Riassuntiva "Esito Complessivo del Sopralluogo"
+      currentY += 7;
       if (currentY > 240) {
         doc.addPage();
         currentY = 20;
@@ -373,76 +445,90 @@ export function ChecklistForm({
       autoTable(doc, {
         startY: currentY,
         theme: "grid",
-        styles: { fontSize: 9, cellPadding: 3 },
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          textColor: [30, 41, 59],
+        },
         headStyles: {
-          fillColor: [30, 77, 59],
+          fillColor: [30, 77, 59], // #1e4d3b
           textColor: [255, 255, 255],
           fontStyle: "bold",
         },
-        head: [["Esito Complessivo del Sopralluogo", "Dettaglio"]],
+        columnStyles: {
+          0: { cellWidth: 50, fontStyle: "bold" },
+          1: { cellWidth: 132 },
+        },
+        head: [
+          [
+            {
+              content: "Esito Complessivo del Sopralluogo",
+              colSpan: 2,
+            },
+          ],
+        ],
         body: [
           ["Esito Generale", formData.esitoComplessivo],
           [
             "Prescrizioni",
-            formData.prescrizioni.trim() !== "" ? formData.prescrizioni : "-",
+            formData.prescrizioni.trim() !== ""
+              ? formData.prescrizioni.trim()
+              : "-",
           ],
           [
             "Note Generali",
-            formData.noteGenerali.trim() !== "" ? formData.noteGenerali : "-",
+            formData.noteGenerali.trim() !== ""
+              ? formData.noteGenerali.trim()
+              : "-",
           ],
         ],
       });
 
-      currentY =
-        (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-          ?.finalY ?? currentY + 30;
+      currentY = getLastAutoTableFinalY(doc, currentY + 30);
 
-      // 5. Firme in calce (Tecnico + SignaturePad Impresa Esecutrice)
+      // 6. Riquadri Affiancati per le Firme ("Firma Tecnico" e "Firma Impresa")
       currentY += 10;
       if (currentY > 235) {
         doc.addPage();
         currentY = 20;
       }
 
-      doc.setTextColor(15, 23, 42);
+      doc.setTextColor(30, 77, 59);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("Firma Tecnico Rilevatore:", 14, currentY);
-      doc.text("Firma Impresa Esecutrice:", 115, currentY);
+      doc.text("Firma Tecnico", 14, currentY);
+      doc.text("Firma Impresa", 114, currentY);
 
       doc.setDrawColor(203, 213, 225);
-      doc.roundedRect(14, currentY + 3, 80, 28, 2, 2);
-      doc.roundedRect(115, currentY + 3, 80, 28, 2, 2);
+      doc.setFillColor(250, 250, 250);
+      doc.rect(14, currentY + 3, 82, 28, "FD");
+      doc.rect(114, currentY + 3, 82, 28, "FD");
 
+      // Firma Tecnico precompilata nel riquadro di sinistra
       doc.setFont("times", "italic");
       doc.setFontSize(14);
       doc.setTextColor(30, 77, 59);
-      doc.text(tecnicoNome, 54, currentY + 18, { align: "center" });
+      doc.text(tecnicoNome, 55, currentY + 19, { align: "center" });
 
-      if (formData.hasImpresaSignature && formData.impresaSignatureDataUrl) {
+      // Firma Impresa dal SignaturePad (via ref) nel riquadro di destra
+      if (signatureBase64) {
         try {
-          doc.addImage(
-            formData.impresaSignatureDataUrl,
-            "PNG",
-            118,
-            currentY + 5,
-            74,
-            24
-          );
+          doc.addImage(signatureBase64, "PNG", 117, currentY + 5, 76, 24);
         } catch {
           // Ignora eventuale immagine non valida
         }
       } else {
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
+        doc.setFontSize(8.5);
         doc.setTextColor(148, 163, 184);
-        doc.text("Firma non apposta", 155, currentY + 18, { align: "center" });
+        doc.text("Firma non apposta", 155, currentY + 19, {
+          align: "center",
+        });
       }
 
-      // 6. Salva il PDF con il nome richiesto
-      doc.save("Checklist_Cantiere.pdf");
+      // 7. Download PDF con il nome richiesto e Redirect al Cantiere
+      doc.save("Checklist_Cantiere_Modern.pdf");
 
-      // 7. Mostra messaggio di conferma e riporta alla pagina del cantiere (/cantiere/[id])
       setShowToast(true);
       setTimeout(() => {
         router.push(`/cantiere/${cantiere.id}?saved=1`);
@@ -792,8 +878,9 @@ export function ChecklistForm({
             </div>
           </div>
 
-          {/* Box Firma Impresa Esecutrice (Canvas Interattivo) */}
+          {/* Box Firma Impresa Esecutrice (Canvas Interattivo con ref) */}
           <SignaturePad
+            ref={signaturePadRef}
             label="Firma Impresa Esecutrice"
             onChange={(hasSignature, dataUrl) =>
               setFormData((prev) => ({
