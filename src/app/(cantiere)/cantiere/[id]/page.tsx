@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { mockCantieri } from "@/mocks/cantieri";
 import {
@@ -74,8 +75,8 @@ export default function CantiereDetailPage() {
         </h2>
 
         {/* 1. Checklist Cantiere (Evidenziata con sfondo verde chiaro) */}
-        <button
-          type="button"
+        <Link
+          href={`/cantiere/${cantiere.id}/checklist`}
           className="flex h-28 w-full items-center justify-between rounded-super border border-brand/20 bg-brand/[0.08] p-5 text-left shadow-sm transition-transform duration-150 active:scale-[0.98]"
         >
           <div className="flex items-center gap-4">
@@ -92,11 +93,11 @@ export default function CantiereDetailPage() {
             </div>
           </div>
           <ChevronRight className="h-5 w-5 shrink-0 text-brand" />
-        </button>
+        </Link>
 
         {/* 2. Verbale Sicurezza */}
-        <button
-          type="button"
+        <Link
+          href={`/cantiere/${cantiere.id}/checklist`}
           className="flex h-28 w-full items-center justify-between rounded-super bg-white p-5 text-left shadow-sm transition-transform duration-150 active:scale-[0.98]"
         >
           <div className="flex items-center gap-4">
@@ -113,7 +114,7 @@ export default function CantiereDetailPage() {
             </div>
           </div>
           <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-        </button>
+        </Link>
 
         {/* 3. Verbale Qualità */}
         <button
