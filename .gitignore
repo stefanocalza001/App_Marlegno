@@ -47,3 +47,6 @@ next-env.d.ts
 **/public/fallback-*.js.map
 **/public/swe-worker-*.js
 **/public/swe-worker-*.js.map
+
+# Local source assets folder (imported into public/assets)
+/Loghi/

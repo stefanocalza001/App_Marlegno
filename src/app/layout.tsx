@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "App Marlegno - Mockup",
   description: "Mockup frontend PWA per la gestione cantieri Marlegno",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/assets/O_green.png",
+    apple: "/assets/O_green.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -13,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1B4332",
+  themeColor: "#063D37",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -27,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it">
-      <body className="antialiased min-h-screen bg-marlegno-surface text-slate-900">
+      <body className="antialiased min-h-screen bg-background text-slate-900">
         {children}
       </body>
     </html>

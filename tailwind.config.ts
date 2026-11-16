@@ -9,12 +9,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        marlegno: {
-          primary: "#1B4332",
-          secondary: "#2D6A4F",
-          accent: "#D4A373",
-          surface: "#F8FAFC",
+        primary: {
+          DEFAULT: "#063D37",
+          hover: "#042E29",
+          light: "#0A524A",
+          foreground: "#FFFFFF",
         },
+        brand: {
+          DEFAULT: "#063D37",
+          hover: "#042E29",
+          light: "#0A524A",
+        },
+        background: "#F9FAFB",
+        surface: "#FFFFFF",
+        marlegno: {
+          primary: "#063D37",
+          secondary: "#0A524A",
+          accent: "#D4A373",
+          surface: "#F9FAFB",
+        },
+      },
+      borderRadius: {
+        super: "1.5rem",
+        "super-lg": "2rem",
       },
     },
   },

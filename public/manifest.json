@@ -5,9 +5,15 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F8FAFC",
-  "theme_color": "#1B4332",
+  "background_color": "#F9FAFB",
+  "theme_color": "#063D37",
   "icons": [
+    {
+      "src": "/assets/O_green.png",
+      "sizes": "447x447",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
