@@ -33,8 +33,11 @@ export default function AdminUtenzePage() {
         <section className="rounded-super bg-surface p-6 shadow-sm">
           <p className="text-sm text-slate-500">Utente attivo</p>
           <p className="mt-1 text-lg font-semibold text-slate-900">
-            {user?.nome ?? "Amministratore Sistema"} ({user?.ruolo ?? "ADMIN"})
+            {user?.name ?? "Admin di Sistema"} ({user?.role ?? "ADMIN"})
           </p>
+          {user?.email && (
+            <p className="text-xs text-slate-400">{user.email}</p>
+          )}
           <p className="mt-3 text-sm text-slate-600">
             Benvenuto nel pannello di amministrazione utenze, permessi RBAC e configurazione globale.
           </p>

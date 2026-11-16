@@ -1,19 +1,25 @@
-import { User, UserRole } from "@/types";
+import { User } from "@/types";
 
-export const MOCK_USERS: Record<UserRole, User> = {
-  GEOMETRA: {
-    id: "usr-geometra-01",
-    nome: "Marco Rossi",
-    ruolo: "GEOMETRA",
+export const mockUsers: User[] = [
+  {
+    id: "1",
+    email: "geometra.test",
+    password: "geo",
+    role: "GEOMETRA",
+    name: "Mario Rossi",
   },
-  RESPONSABILE: {
-    id: "usr-responsabile-01",
-    nome: "Laura Bianchi",
-    ruolo: "RESPONSABILE",
+  {
+    id: "2",
+    email: "responsabile.test",
+    password: "resp",
+    role: "RESPONSABILE",
+    name: "Luigi Verdi",
   },
-  ADMIN: {
-    id: "usr-admin-01",
-    nome: "Amministratore Sistema",
-    ruolo: "ADMIN",
+  {
+    id: "3",
+    email: "admin.test",
+    password: "adm",
+    role: "ADMIN",
+    name: "Admin di Sistema",
   },
-};
+];

@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { User, UserRole } from "@/types";
-import { MOCK_USERS } from "@/mocks/users";
+import { mockUsers } from "@/mocks/users";
 
 const STORAGE_KEY = "marlegno_auth_user";
 
@@ -16,7 +16,7 @@ export const ROLE_ROUTES: Record<UserRole, string> = {
 interface AuthContextValue {
   user: User | null;
   isHydrated: boolean;
-  loginAs: (ruolo: UserRole) => void;
+  login: (email: string, password: string) => User | null;
   logout: () => void;
 }
 
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as User;
-        if (parsed && parsed.ruolo && ROLE_ROUTES[parsed.ruolo]) {
+        if (parsed && parsed.role && ROLE_ROUTES[parsed.role]) {
           setUser(parsed);
         }
       }
@@ -43,16 +43,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const loginAs = (ruolo: UserRole) => {
-    const selectedUser = MOCK_USERS[ruolo];
-    setUser(selectedUser);
+  const login = (email: string, password: string): User | null => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const matched = mockUsers.find(
+      (u) =>
+        u.email.toLowerCase() === normalizedEmail && u.password === password
+    );
+
+    if (!matched) {
+      return null;
+    }
+
+    const sessionUser: User = {
+      id: matched.id,
+      email: matched.email,
+      role: matched.role,
+      name: matched.name,
+    };
+
+    setUser(sessionUser);
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedUser));
-      window.localStorage.setItem("marlegno_role", ruolo);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
+      window.localStorage.setItem("marlegno_role", sessionUser.role);
     } catch {
       // Ignora errori localStorage
     }
-    router.push(ROLE_ROUTES[ruolo]);
+
+    router.push(ROLE_ROUTES[sessionUser.role]);
+    return sessionUser;
   };
 
   const logout = () => {
@@ -67,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isHydrated, loginAs, logout }}>
+    <AuthContext.Provider value={{ user, isHydrated, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
