@@ -244,6 +244,19 @@ export function ChecklistForm({
     if (isGeneratingPdf) return;
 
     setIsGeneratingPdf(true);
+
+    // Timestamp esatto del click su "Salva e Genera PDF"
+    const now = new Date();
+    const dataOggi = now.toLocaleDateString("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const oraOggi = now.toLocaleTimeString("it-IT", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
     const tecnicoNome = user?.name ?? "Mario Rossi";
     const signatureBase64 =
       signaturePadRef.current?.getDataURL() ??
@@ -257,7 +270,8 @@ export function ChecklistForm({
           cantiereId: cantiere.id,
           cantiereNome: cantiere.nome,
           isUpdate,
-          dataCompilazione: todayFormatted,
+          dataCompilazione: dataOggi,
+          oraCompilazione: oraOggi,
           tecnico: tecnicoNome,
           ...formData,
           impresaSignatureDataUrl: signatureBase64 ?? undefined,
@@ -276,7 +290,7 @@ export function ChecklistForm({
         format: "a4",
       });
 
-      // 1. Header Rettangolo Verde Scuro (#1e4d3b -> RGB: 30, 77, 59)
+      // 1. Header Principale del Documento con doc.rect() (#1e4d3b -> RGB [30, 77, 59])
       doc.setFillColor(30, 77, 59);
       doc.rect(0, 0, 210, 24, "F");
 
@@ -285,7 +299,7 @@ export function ChecklistForm({
       doc.setFontSize(15);
       doc.text("CHECK LIST SICUREZZA CANTIERE", 14, 15);
 
-      // 2. Box Metadati Grigio Chiaro (#F3F4F6 -> RGB: 243, 244, 246) con angoli smussati
+      // 2. Box Metadati Storicizzazione (#F3F4F6)
       doc.setFillColor(243, 244, 246);
       doc.setDrawColor(229, 231, 235);
       doc.setLineWidth(0.3);
@@ -303,7 +317,7 @@ export function ChecklistForm({
       } else {
         doc.text("Prima Compilazione", 18, 36);
         doc.setFont("helvetica", "normal");
-        doc.text(`Creazione nuova revisione (Rev. 1) • ${todayFormatted}`, 192, 36, {
+        doc.text(`Creazione nuova revisione (Rev. 1) • ${dataOggi}`, 192, 36, {
           align: "right",
         });
       }
@@ -320,28 +334,36 @@ export function ChecklistForm({
           lineWidth: { top: 0.2, bottom: 0.2, left: 0, right: 0 },
         },
         headStyles: {
-          fillColor: [232, 245, 238], // Background verdino leggero
-          textColor: [30, 77, 59], // Testo verde scuro #1e4d3b
+          fillColor: [230, 239, 233],
+          textColor: [30, 77, 59],
           fontStyle: "bold",
         },
         head: [["Cantiere", "Indirizzo", "Data", "Tecnico"]],
-        body: [[cantiere.nome, cantiere.indirizzo, todayFormatted, tecnicoNome]],
+        body: [[cantiere.nome, cantiere.indirizzo, dataOggi, tecnicoNome]],
       });
 
       let currentY = getLastAutoTableFinalY(doc, 62);
 
-      // 4. Tabelle delle Sezioni (una tabella autotable per ogni sezione abilitata)
+      // 4. Intestazioni a Compartimento (doc.rect con RGB [230, 239, 233]) + autoTable per ogni sezione
       for (const section of SECTIONS) {
         const secState = formData.sections[section.id];
         if (secState.nonPresente) {
           continue;
         }
 
-        currentY += 6;
-        if (currentY > 250) {
+        currentY += 7;
+        if (currentY > 245) {
           doc.addPage();
           currentY = 20;
         }
+
+        // Rettangolo pieno verde tenue RGB [230, 239, 233] con testo verde scuro RGB [30, 77, 59]
+        doc.setFillColor(230, 239, 233);
+        doc.rect(14, currentY, 182, 8.5, "F");
+        doc.setTextColor(30, 77, 59);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(section.title, 17, currentY + 5.8);
 
         const sectionRows: string[][] = section.items.map((itemText, idx) => {
           const itemState = secState.items[idx];
@@ -361,59 +383,24 @@ export function ChecklistForm({
         }
 
         autoTable(doc, {
-          startY: currentY,
+          startY: currentY + 8.5,
           theme: "grid",
           styles: {
             fontSize: 8.5,
             cellPadding: 2.8,
             textColor: [30, 41, 59],
           },
-          head: [
-            [
-              {
-                content: section.title,
-                colSpan: 3,
-                styles: {
-                  fillColor: [30, 77, 59], // #1e4d3b
-                  textColor: [255, 255, 255],
-                  fontStyle: "bold",
-                  fontSize: 9.5,
-                },
-              },
-            ],
-            [
-              {
-                content: "Punto di controllo",
-                styles: {
-                  fillColor: [241, 245, 249],
-                  textColor: [30, 77, 59],
-                  fontStyle: "bold",
-                },
-              },
-              {
-                content: "Esito",
-                styles: {
-                  fillColor: [241, 245, 249],
-                  textColor: [30, 77, 59],
-                  fontStyle: "bold",
-                  halign: "center",
-                },
-              },
-              {
-                content: "Note",
-                styles: {
-                  fillColor: [241, 245, 249],
-                  textColor: [30, 77, 59],
-                  fontStyle: "bold",
-                },
-              },
-            ],
-          ],
-          columnStyles: {
-            0: { cellWidth: 96 }, // Punto di controllo (larga)
-            1: { cellWidth: 32, halign: "center" }, // Esito (stretta al centro)
-            2: { cellWidth: 54 }, // Note (larga)
+          headStyles: {
+            fillColor: [30, 77, 59],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
           },
+          columnStyles: {
+            0: { cellWidth: 96 },
+            1: { cellWidth: 32, halign: "center" },
+            2: { cellWidth: 54 },
+          },
+          head: [["Punto di controllo", "Esito", "Note"]],
           body: sectionRows,
           didParseCell: (data) => {
             if (data.section === "body" && data.column.index === 1) {
@@ -432,15 +419,51 @@ export function ChecklistForm({
           },
         });
 
-        currentY = getLastAutoTableFinalY(doc, currentY + 25);
+        currentY = getLastAutoTableFinalY(doc, currentY + 32);
       }
 
-      // 5. Tabella Riassuntiva "Esito Complessivo del Sopralluogo"
-      currentY += 7;
-      if (currentY > 240) {
+      // 5. Sezione "Esito Complessivo" con Highlight Colorato Dinamico
+      currentY += 8;
+      if (currentY > 225) {
         doc.addPage();
         currentY = 20;
       }
+
+      // Intestazione compartimento Esito Complessivo
+      doc.setFillColor(230, 239, 233);
+      doc.rect(14, currentY, 182, 8.5, "F");
+      doc.setTextColor(30, 77, 59);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Esito Complessivo del Sopralluogo", 17, currentY + 5.8);
+
+      currentY += 10.5;
+
+      // Calcolo colore di highlight per l'Esito Finale
+      const esitoText = formData.esitoComplessivo;
+      const esitoLower = esitoText.toLowerCase();
+      if (
+        esitoLower.includes("non regolare") ||
+        esitoLower.includes("sospensione")
+      ) {
+        doc.setFillColor(204, 0, 0); // Rosso [204, 0, 0]
+      } else if (esitoLower.includes("prescrizioni")) {
+        doc.setFillColor(230, 126, 34); // Arancione per eccezioni/prescrizioni
+      } else if (esitoLower.includes("regolare")) {
+        doc.setFillColor(34, 139, 34); // Verde [34, 139, 34]
+      } else {
+        doc.setFillColor(230, 126, 34); // Arancione fallback
+      }
+
+      doc.rect(14, currentY, 182, 10, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text(`ESITO FINALE: ${esitoText.toUpperCase()}`, 105, currentY + 6.5, {
+        align: "center",
+      });
+
+      currentY += 11;
 
       autoTable(doc, {
         startY: currentY,
@@ -450,25 +473,11 @@ export function ChecklistForm({
           cellPadding: 3,
           textColor: [30, 41, 59],
         },
-        headStyles: {
-          fillColor: [30, 77, 59], // #1e4d3b
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-        },
         columnStyles: {
-          0: { cellWidth: 50, fontStyle: "bold" },
-          1: { cellWidth: 132 },
+          0: { cellWidth: 42, fontStyle: "bold", fillColor: [248, 250, 252] },
+          1: { cellWidth: 140 },
         },
-        head: [
-          [
-            {
-              content: "Esito Complessivo del Sopralluogo",
-              colSpan: 2,
-            },
-          ],
-        ],
         body: [
-          ["Esito Generale", formData.esitoComplessivo],
           [
             "Prescrizioni",
             formData.prescrizioni.trim() !== ""
@@ -484,11 +493,11 @@ export function ChecklistForm({
         ],
       });
 
-      currentY = getLastAutoTableFinalY(doc, currentY + 30);
+      currentY = getLastAutoTableFinalY(doc, currentY + 22);
 
-      // 6. Riquadri Affiancati per le Firme ("Firma Tecnico" e "Firma Impresa")
+      // 6. Firme con Timestamp e Geolocalizzazione Nominale Certificata
       currentY += 10;
-      if (currentY > 235) {
+      if (currentY > 225) {
         doc.addPage();
         currentY = 20;
       }
@@ -501,19 +510,19 @@ export function ChecklistForm({
 
       doc.setDrawColor(203, 213, 225);
       doc.setFillColor(250, 250, 250);
-      doc.rect(14, currentY + 3, 82, 28, "FD");
-      doc.rect(114, currentY + 3, 82, 28, "FD");
+      doc.rect(14, currentY + 3, 82, 26, "FD");
+      doc.rect(114, currentY + 3, 82, 26, "FD");
 
-      // Firma Tecnico precompilata nel riquadro di sinistra
+      // Firma Tecnico nel riquadro sinistro
       doc.setFont("times", "italic");
       doc.setFontSize(14);
       doc.setTextColor(30, 77, 59);
-      doc.text(tecnicoNome, 55, currentY + 19, { align: "center" });
+      doc.text(tecnicoNome, 55, currentY + 18, { align: "center" });
 
-      // Firma Impresa dal SignaturePad (via ref) nel riquadro di destra
+      // Firma Impresa dal SignaturePad nel riquadro destro
       if (signatureBase64) {
         try {
-          doc.addImage(signatureBase64, "PNG", 117, currentY + 5, 76, 24);
+          doc.addImage(signatureBase64, "PNG", 117, currentY + 5, 76, 22);
         } catch {
           // Ignora eventuale immagine non valida
         }
@@ -521,12 +530,29 @@ export function ChecklistForm({
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(148, 163, 184);
-        doc.text("Firma non apposta", 155, currentY + 19, {
+        doc.text("Firma non apposta", 155, currentY + 18, {
           align: "center",
         });
       }
 
-      // 7. Download PDF con il nome richiesto e Redirect al Cantiere
+      // Timestamp e Geolocalizzazione Nominale in corsivo sotto entrambi i riquadri firma
+      const metaY = currentY + 33.5;
+      const locationLine = `Firmato a: ${cantiere.nome} (${cantiere.indirizzo})`;
+      const timeLine = `Il ${dataOggi} alle ${oraOggi}`;
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+
+      // Sotto Firma Tecnico (sinistra)
+      doc.text(locationLine, 14, metaY, { maxWidth: 82 });
+      doc.text(timeLine, 14, metaY + 6.5);
+
+      // Sotto Firma Impresa (destra)
+      doc.text(locationLine, 114, metaY, { maxWidth: 82 });
+      doc.text(timeLine, 114, metaY + 6.5);
+
+      // 7. Salvataggio PDF e Redirect verso /cantiere/[id]
       doc.save("Checklist_Cantiere_Modern.pdf");
 
       setShowToast(true);
