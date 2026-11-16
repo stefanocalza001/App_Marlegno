@@ -4,7 +4,7 @@
  * @file src/app/(cantiere)/cantiere/[id]/page.tsx
  * @description Pagina di dettaglio operativo del singolo cantiere (`/cantiere/[id]`).
  * Espone i 3 modelli documentali compilabili dal Geometra (Checklist Cantiere, Verbale Sicurezza, Verbale Qualità)
- * adattando dinamicamente la rotta della Checklist in base allo stato di prima compilazione o aggiornamento.
+ * indirizzando ciascun pulsante verso la propria rotta dedicata.
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -114,7 +114,7 @@ function CantiereDetailContent() {
           Modelli Documentali
         </h2>
 
-        {/* 1. Checklist Cantiere (Evidenziata con sfondo verde chiaro) */}
+        {/* 1. Checklist Cantiere -> /cantiere/${id}/checklist */}
         <Link
           href={checklistHref}
           className="flex h-28 w-full items-center justify-between rounded-super border border-brand/20 bg-brand/[0.08] p-5 text-left shadow-sm transition-transform duration-150 active:scale-[0.98]"
@@ -135,9 +135,9 @@ function CantiereDetailContent() {
           <ChevronRight className="h-5 w-5 shrink-0 text-brand" />
         </Link>
 
-        {/* 2. Verbale Sicurezza */}
+        {/* 2. Verbale Sicurezza -> /cantiere/${id}/verbale-sicurezza */}
         <Link
-          href={`/cantiere/${cantiere.id}/checklist`}
+          href={`/cantiere/${cantiere.id}/verbale-sicurezza`}
           className="flex h-28 w-full items-center justify-between rounded-super bg-white p-5 text-left shadow-sm transition-transform duration-150 active:scale-[0.98]"
         >
           <div className="flex items-center gap-4">
@@ -156,9 +156,9 @@ function CantiereDetailContent() {
           <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
         </Link>
 
-        {/* 3. Verbale Qualità */}
-        <button
-          type="button"
+        {/* 3. Verbale Qualità -> /cantiere/${id}/verbale-qualita */}
+        <Link
+          href={`/cantiere/${cantiere.id}/verbale-qualita`}
           className="flex h-28 w-full items-center justify-between rounded-super bg-white p-5 text-left shadow-sm transition-transform duration-150 active:scale-[0.98]"
         >
           <div className="flex items-center gap-4">
@@ -175,7 +175,7 @@ function CantiereDetailContent() {
             </div>
           </div>
           <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-        </button>
+        </Link>
       </div>
     </div>
   );
