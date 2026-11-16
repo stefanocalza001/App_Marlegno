@@ -5,7 +5,7 @@
  * @description Componente form unificato per la redazione dei Verbali di Cantiere ("Sicurezza" e "Qualità").
  * Supporta la compilazione dei soggetti coinvolti, l'eventuale elemento contestato (solo per Qualità),
  * la descrizione della rilevazione, l'acquisizione di allegati fotografici con miniature in anteprima,
- * le firme digitali e l'esportazione PDF client-side in stile "isole supercerchio".
+ * le firme digitali e l'esportazione PDF client-side con incorporamento diretto delle immagini caricate.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -40,15 +40,22 @@ import {
 export type VerbaleType = "Sicurezza" | "Qualità";
 
 /**
- * Rappresenta una foto allegata dall'utente con il relativo URL temporaneo di anteprima (`blob:`).
+ * Rappresenta una foto allegata dall'utente con URL di anteprima, Data URL JPEG normalizzato per `jsPDF`
+ * e dimensioni originali per preservare le proporzioni nel PDF.
  */
 interface PhotoPreview {
   /** Identificativo univoco locale dell'allegato. */
   id: string;
   /** Nome originale del file immagine. */
   name: string;
-  /** URL generato tramite `URL.createObjectURL(file)` per il rendering della miniatura. */
+  /** URL generato tramite `URL.createObjectURL(file)` per il rendering della miniatura nel DOM. */
   previewUrl: string;
+  /** Stringa Base64 (`data:image/jpeg;base64,...`) normalizzata su canvas per l'inserimento nel PDF via `doc.addImage`. */
+  pdfDataUrl: string;
+  /** Larghezza in pixel dell'immagine normalizzata. */
+  width: number;
+  /** Altezza in pixel dell'immagine normalizzata. */
+  height: number;
 }
 
 /**
@@ -59,6 +66,69 @@ interface VerbaleFormProps {
   cantiere: Cantiere;
   /** Tipologia del verbale da emettere (`"Sicurezza"` o `"Qualità"`). */
   type: VerbaleType;
+}
+
+/**
+ * Converte un file immagine (`File`) in un Data URL JPEG normalizzato tramite `<canvas>`,
+ * garantendo la piena compatibilità con `jsPDF.addImage()` per qualsiasi formato sorgente (PNG, WebP, JPEG, ecc.).
+ *
+ * @param file - File immagine selezionato o scattato dall'utente.
+ * @returns Promise risolta con `{ pdfDataUrl, width, height }`.
+ */
+function normalizeImageForPdf(
+  file: File
+): Promise<{ pdfDataUrl: string; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new window.Image();
+
+    img.onload = () => {
+      try {
+        const maxDimension = 1200;
+        let targetWidth = img.naturalWidth || 800;
+        let targetHeight = img.naturalHeight || 600;
+
+        if (targetWidth > maxDimension || targetHeight > maxDimension) {
+          const ratio = Math.min(
+            maxDimension / targetWidth,
+            maxDimension / targetHeight
+          );
+          targetWidth = Math.round(targetWidth * ratio);
+          targetHeight = Math.round(targetHeight * ratio);
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Impossibile inizializzare il contesto canvas 2D"));
+          return;
+        }
+
+        // Sfondo bianco per gestire eventuali trasparenze PNG/WebP prima della conversione in JPEG
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        const pdfDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        URL.revokeObjectURL(objectUrl);
+        resolve({ pdfDataUrl, width: targetWidth, height: targetHeight });
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      }
+    };
+
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    };
+
+    img.src = objectUrl;
+  });
 }
 
 /**
@@ -136,7 +206,7 @@ function getLastAutoTableFinalY(doc: jsPDF, fallbackY: number): number {
 
 /**
  * Componente form completo per la creazione di un Verbale di Sicurezza o di Qualità,
- * comprensivo di caricamento fotografico, firma touch su canvas ed esportazione PDF.
+ * comprensivo di caricamento fotografico, firma touch su canvas ed esportazione PDF con immagini incorporate.
  *
  * @param props - Oggetto `cantiere` e tipologia `type` (`"Sicurezza"` | `"Qualità"`).
  * @returns Elemento JSX del modulo verbale.
@@ -168,31 +238,57 @@ export function VerbaleForm({ cantiere, type }: VerbaleFormProps) {
   });
 
   // Revoca gli URL blob delle miniature quando il componente viene smontato per evitare memory leak
+  const photosRef = useRef<PhotoPreview[]>([]);
+  photosRef.current = photos;
   useEffect(() => {
     return () => {
-      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     };
-  }, [photos]);
+  }, []);
 
   /**
    * Gestisce la selezione o lo scatto di nuove fotografie dal dispositivo mobile/desktop,
-   * generando per ciascun file un URL di anteprima locale tramite `URL.createObjectURL`.
+   * generando per ciascun file sia l'URL di anteprima DOM sia il Data URL JPEG per l'esportazione PDF.
    *
    * @param e - Evento di cambio dell'input file `<input type="file">`.
    */
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    const newPreviews: PhotoPreview[] = Array.from(fileList).map((file, idx) => ({
-      id: `${Date.now()}-${idx}-${file.name}`,
-      name: file.name,
-      previewUrl: URL.createObjectURL(file),
-    }));
-
-    setPhotos((prev) => [...prev, ...newPreviews]);
+    const filesArray = Array.from(fileList);
     // Resetta il valore dell'input per permettere di riselezionare anche lo stesso file
     e.target.value = "";
+
+    const processed = await Promise.all(
+      filesArray.map(async (file, idx) => {
+        const previewUrl = URL.createObjectURL(file);
+        try {
+          const { pdfDataUrl, width, height } = await normalizeImageForPdf(
+            file
+          );
+          return {
+            id: `${Date.now()}-${idx}-${file.name}`,
+            name: file.name,
+            previewUrl,
+            pdfDataUrl,
+            width,
+            height,
+          };
+        } catch {
+          return {
+            id: `${Date.now()}-${idx}-${file.name}`,
+            name: file.name,
+            previewUrl,
+            pdfDataUrl: "",
+            width: 800,
+            height: 600,
+          };
+        }
+      })
+    );
+
+    setPhotos((prev) => [...prev, ...processed]);
   };
 
   /**
@@ -212,6 +308,7 @@ export function VerbaleForm({ cantiere, type }: VerbaleFormProps) {
 
   /**
    * Genera lato client il PDF del Verbale in stile "isole supercerchio",
+   * incorporando direttamente le immagini fotografiche allegate tramite `doc.addImage`,
    * avvia il download `Verbale_${type}_Mockup.pdf` e reindirizza a `/cantiere/${cantiere.id}`.
    *
    * @param e - Evento di submit del form HTML.
@@ -249,7 +346,8 @@ export function VerbaleForm({ cantiere, type }: VerbaleFormProps) {
           oraEmissione: oraOggi,
           tecnico: tecnicoNome,
           soggettiCoinvolti,
-          elementoContestato: type === "Qualità" ? elementoContestato : undefined,
+          elementoContestato:
+            type === "Qualità" ? elementoContestato : undefined,
           dettaglioRilevazione,
           numeroFotoAllegate: photos.length,
         })
@@ -386,36 +484,97 @@ export function VerbaleForm({ cantiere, type }: VerbaleFormProps) {
 
       currentY = getLastAutoTableFinalY(doc, currentY + bodyCardHeight) + 7;
 
-      // 4. Blocco Allegati Fotografici (se sono state caricate miniature nello stato)
-      if (photos.length > 0) {
-        drawSuperRect(doc, 14, currentY, 182, 16, {
-          fillColor: [248, 250, 249],
-          strokeColor: [220, 228, 224],
-          radius: 4,
-        });
+      // 4. Sezione Allegati Fotografici con Rendering Diretto delle Immagini sul PDF
+      const validPhotos = photos.filter((p) => p.pdfDataUrl !== "");
+      if (validPhotos.length > 0) {
+        // Griglia a 2 colonne (larghezza max per foto: 82mm, altezza max: 56mm)
+        const cellW = 82;
+        const cellH = 56;
+        const rowGap = 10;
+        const rowsCount = Math.ceil(validPhotos.length / 2);
 
-        doc.setTextColor(30, 77, 59);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9.5);
-        doc.text(
-          "Allegati fotografici acquisiti digitalmente a sistema",
-          17.5,
-          currentY + 7
-        );
+        for (let rowIndex = 0; rowIndex < rowsCount; rowIndex++) {
+          const rowPhotos = validPhotos.slice(rowIndex * 2, rowIndex * 2 + 2);
+          const blockHeight = (rowIndex === 0 ? 14 : 6) + cellH + 10;
 
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.text(
-          `Totale allegati acquisiti: ${photos.length} (${photos
-            .map((p) => p.name)
-            .join(", ")})`,
-          17.5,
-          currentY + 12.5,
-          { maxWidth: 175 }
-        );
+          if (currentY + blockHeight > 278) {
+            doc.addPage();
+            currentY = 16;
+          }
 
-        currentY += 22;
+          // Isola Supercerchio per la riga di allegati fotografici
+          drawSuperRect(doc, 14, currentY, 182, blockHeight, {
+            fillColor: [248, 250, 249],
+            strokeColor: [220, 228, 224],
+            radius: 4,
+          });
+
+          let imageTopY = currentY + 4;
+          if (rowIndex === 0) {
+            doc.setTextColor(30, 77, 59);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.text(
+              `Allegati Fotografici (${validPhotos.length})`,
+              17.5,
+              currentY + 7.5
+            );
+            imageTopY = currentY + 11;
+          }
+
+          rowPhotos.forEach((photo, colIndex) => {
+            const slotX = colIndex === 0 ? 18 : 110;
+
+            // Cornice bianca di contenimento della singola foto
+            drawSuperRect(doc, slotX, imageTopY, cellW, cellH, {
+              fillColor: [255, 255, 255],
+              strokeColor: [226, 232, 240],
+              radius: 2.5,
+            });
+
+            // Calcola le dimensioni in mm preservando l'aspect ratio originale della foto
+            const maxImgW = cellW - 4;
+            const maxImgH = cellH - 4;
+            const aspect = photo.width / (photo.height || 1);
+            let drawW = maxImgW;
+            let drawH = drawW / aspect;
+
+            if (drawH > maxImgH) {
+              drawH = maxImgH;
+              drawW = drawH * aspect;
+            }
+
+            const offsetX = slotX + (cellW - drawW) / 2;
+            const offsetY = imageTopY + (cellH - drawH) / 2;
+
+            try {
+              doc.addImage(
+                photo.pdfDataUrl,
+                "JPEG",
+                offsetX,
+                offsetY,
+                drawW,
+                drawH
+              );
+            } catch {
+              // Ignora se l'immagine non è decodificabile
+            }
+
+            // Didascalia con il nome dell'allegato sotto la foto
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(100, 116, 139);
+            const cleanCaption =
+              photo.name.length > 34
+                ? `${photo.name.slice(0, 31)}...`
+                : photo.name;
+            doc.text(cleanCaption, slotX + cellW / 2, imageTopY + cellH + 4.5, {
+              align: "center",
+            });
+          });
+
+          currentY += blockHeight + (rowGap - 4);
+        }
       }
 
       // 5. Box Firme Finali in stile Supercerchio con Timestamp Certificato
@@ -677,7 +836,7 @@ export function VerbaleForm({ cantiere, type }: VerbaleFormProps) {
             </div>
             {photos.length > 0 && (
               <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand">
-                {photos.length} {photos.length === 1 ? "foto" : "foto"}
+                {photos.length} foto
               </span>
             )}
           </div>
