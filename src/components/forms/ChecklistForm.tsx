@@ -228,7 +228,7 @@ export function ChecklistForm({
     }));
   };
 
-  const handleGeneratePDF = async (e: React.FormEvent<HTMLFormElement>) => {
+  const generatePDF = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isGeneratingPdf) return;
 
@@ -236,7 +236,6 @@ export function ChecklistForm({
     const tecnicoNome = user?.name ?? "Mario Rossi";
 
     try {
-      // Salva lo stato in localStorage
       window.localStorage.setItem(
         `marlegno_checklist_${cantiere.id}`,
         JSON.stringify({
@@ -253,8 +252,7 @@ export function ChecklistForm({
     }
 
     try {
-      // Breve attesa per mostrare il feedback di generazione in corso
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 450));
 
       const doc = new jsPDF({
         orientation: "portrait",
@@ -262,109 +260,110 @@ export function ChecklistForm({
         format: "a4",
       });
 
-      // 1. Header Verde Marlegno (#063D37 -> RGB 6, 61, 55)
-      doc.setFillColor(6, 61, 55);
-      doc.rect(0, 0, 210, 28, "F");
-
-      doc.setTextColor(255, 255, 255);
+      // 1. Intestazione stilizzata verde scuro #1e4d3b (RGB: 30, 77, 59)
+      doc.setTextColor(30, 77, 59);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("CHECK LIST SICUREZZA CANTIERE", 14, 13);
+      doc.setFontSize(18);
+      doc.text("MARLEGNO", 14, 16);
+
+      doc.setFontSize(14);
+      doc.text("CHECK LIST SICUREZZA CANTIERE", 14, 24);
+
+      doc.setDrawColor(30, 77, 59);
+      doc.setLineWidth(0.6);
+      doc.line(14, 27, 196, 27);
+
+      // 2. Riquadro Dati del Cantiere (Nome, Indirizzo, Data, Tecnico)
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(14, 31, 182, 22, 2, 2, "FD");
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.text("Cantiere:", 18, 38);
+      doc.text("Indirizzo:", 18, 46);
+      doc.text("Data:", 125, 38);
+      doc.text("Tecnico:", 125, 46);
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text(
-        isUpdate
-          ? "Marlegno S.r.l. - Aggiornamento Checklist (Revisione n. 4)"
-          : "Marlegno S.r.l. - Prima Compilazione Checklist (Revisione n. 1)",
-        14,
-        21
-      );
+      doc.text(cantiere.nome, 38, 38);
+      doc.text(cantiere.indirizzo, 38, 46);
+      doc.text(todayFormatted, 143, 38);
+      doc.text(tecnicoNome, 143, 46);
 
-      // 2. Dati Generali Cantiere
+      // 3. Tabella Dati (autotable) con colonne: Punto di controllo | Esito | Note
+      const tableBody: string[][] = [];
+
+      for (const section of SECTIONS) {
+        const secState = formData.sections[section.id];
+
+        if (secState.nonPresente) {
+          tableBody.push([
+            `${section.title} (Non presente in cantiere)`,
+            "N/A",
+            "Sezione non presente in cantiere",
+          ]);
+        } else {
+          section.items.forEach((itemText, idx) => {
+            const itemState = secState.items[idx];
+            tableBody.push([
+              `${section.title} — ${itemText}`,
+              itemState.esito,
+              itemState.nota.trim() !== "" ? itemState.nota.trim() : "-",
+            ]);
+          });
+
+          if (secState.osservazioni.trim() !== "") {
+            tableBody.push([
+              `${section.title} — Osservazioni di sezione`,
+              "Nota",
+              secState.osservazioni.trim(),
+            ]);
+          }
+        }
+      }
+
       autoTable(doc, {
-        startY: 34,
+        startY: 58,
         theme: "grid",
-        styles: { fontSize: 9, cellPadding: 3 },
+        styles: {
+          fontSize: 8.5,
+          cellPadding: 2.8,
+          textColor: [30, 41, 59],
+        },
         headStyles: {
-          fillColor: [6, 61, 55],
+          fillColor: [30, 77, 59], // #1e4d3b
           textColor: [255, 255, 255],
           fontStyle: "bold",
         },
-        head: [["Cantiere", "Indirizzo", "Data Sopralluogo", "Tecnico Rilevatore"]],
-        body: [[cantiere.nome, cantiere.indirizzo, todayFormatted, tecnicoNome]],
+        columnStyles: {
+          0: { cellWidth: 104 },
+          1: { cellWidth: 32, halign: "center" },
+          2: { cellWidth: 46 },
+        },
+        head: [["Punto di controllo", "Esito", "Note"]],
+        body: tableBody,
+        didParseCell: (data) => {
+          if (data.section === "body" && data.column.index === 1) {
+            const esitoValue = String(data.cell.raw ?? "");
+            if (esitoValue === "Conforme") {
+              data.cell.styles.textColor = [30, 77, 59]; // Verde #1e4d3b
+              data.cell.styles.fontStyle = "bold";
+            } else if (esitoValue === "Non conforme") {
+              data.cell.styles.textColor = [204, 0, 0]; // Rosso #cc0000
+              data.cell.styles.fontStyle = "bold";
+            }
+          }
+        },
       });
 
       let currentY =
         (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-          ?.finalY ?? 52;
+          ?.finalY ?? 180;
 
-      // 3. Sezioni e Punti Controllati
-      for (const section of SECTIONS) {
-        const secState = formData.sections[section.id];
-        currentY += 6;
-
-        if (currentY > 260) {
-          doc.addPage();
-          currentY = 20;
-        }
-
-        if (secState.nonPresente) {
-          autoTable(doc, {
-            startY: currentY,
-            theme: "grid",
-            styles: { fontSize: 9, cellPadding: 2.5 },
-            headStyles: {
-              fillColor: [100, 116, 139],
-              textColor: [255, 255, 255],
-              fontStyle: "bold",
-            },
-            head: [[`${section.title} — NON PRESENTE IN CANTIERE`]],
-            body: [["Sezione disabilitata (non applicabile al cantiere in oggetto)."]],
-          });
-        } else {
-          const rows = section.items.map((itemText, idx) => {
-            const itemState = secState.items[idx];
-            return [
-              itemText,
-              itemState.esito,
-              itemState.nota.trim() !== "" ? itemState.nota : "-",
-            ];
-          });
-
-          if (secState.osservazioni.trim() !== "") {
-            rows.push([
-              "Osservazioni di sezione",
-              "NOTA",
-              secState.osservazioni.trim(),
-            ]);
-          }
-
-          autoTable(doc, {
-            startY: currentY,
-            theme: "grid",
-            styles: { fontSize: 8.5, cellPadding: 2.5 },
-            headStyles: {
-              fillColor: [6, 61, 55],
-              textColor: [255, 255, 255],
-              fontStyle: "bold",
-            },
-            columnStyles: {
-              0: { cellWidth: 105 },
-              1: { cellWidth: 32, fontStyle: "bold" },
-              2: { cellWidth: 45 },
-            },
-            head: [[section.title, "Esito", "Note"]],
-            body: rows,
-          });
-        }
-
-        currentY =
-          (doc as unknown as { lastAutoTable?: { finalY: number } })
-            .lastAutoTable?.finalY ?? currentY + 20;
-      }
-
-      // 4. Esito Complessivo del Sopralluogo
+      // 4. Esito Complessivo e Prescrizioni
       currentY += 8;
       if (currentY > 240) {
         doc.addPage();
@@ -376,7 +375,7 @@ export function ChecklistForm({
         theme: "grid",
         styles: { fontSize: 9, cellPadding: 3 },
         headStyles: {
-          fillColor: [6, 61, 55],
+          fillColor: [30, 77, 59],
           textColor: [255, 255, 255],
           fontStyle: "bold",
         },
@@ -398,7 +397,7 @@ export function ChecklistForm({
         (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
           ?.finalY ?? currentY + 30;
 
-      // 5. Firme (Tecnico + Impresa Esecutrice con immagine Base64 se presente)
+      // 5. Firme in calce (Tecnico + SignaturePad Impresa Esecutrice)
       currentY += 10;
       if (currentY > 235) {
         doc.addPage();
@@ -417,7 +416,7 @@ export function ChecklistForm({
 
       doc.setFont("times", "italic");
       doc.setFontSize(14);
-      doc.setTextColor(6, 61, 55);
+      doc.setTextColor(30, 77, 59);
       doc.text(tecnicoNome, 54, currentY + 18, { align: "center" });
 
       if (formData.hasImpresaSignature && formData.impresaSignatureDataUrl) {
@@ -431,27 +430,22 @@ export function ChecklistForm({
             24
           );
         } catch {
-          // Ignora se il canvas è vuoto o non valido
+          // Ignora eventuale immagine non valida
         }
       } else {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.setTextColor(148, 163, 184);
-        doc.text(
-          "Firma non apposta",
-          155,
-          currentY + 18,
-          { align: "center" }
-        );
+        doc.text("Firma non apposta", 155, currentY + 18, { align: "center" });
       }
 
-      // 6. Download del PDF nel browser
-      doc.save("Checklist_Cantiere_Mockup.pdf");
+      // 6. Salva il PDF con il nome richiesto
+      doc.save("Checklist_Cantiere.pdf");
 
-      // Mostra toast verde e naviga verso /dashboard
+      // 7. Mostra messaggio di conferma e riporta alla pagina del cantiere (/cantiere/[id])
       setShowToast(true);
       setTimeout(() => {
-        router.push("/dashboard?pdfSaved=1");
+        router.push(`/cantiere/${cantiere.id}?saved=1`);
       }, 900);
     } catch {
       setIsGeneratingPdf(false);
@@ -473,18 +467,18 @@ export function ChecklistForm({
 
   return (
     <>
-      {/* Toast Verde di Notifica */}
+      {/* Toast Discreto di Conferma */}
       {showToast && (
         <div
           role="status"
           className="fixed top-20 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg"
         >
           <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>PDF salvato in locale</span>
+          <span>Documento salvato con successo</span>
         </div>
       )}
 
-      <form onSubmit={handleGeneratePDF} className="space-y-6 pb-28">
+      <form onSubmit={generatePDF} className="space-y-6 pb-28">
         {/* Header Titolo e Box Storicizzazione (Metadati Revisione) */}
         <div>
           <div className="px-1 mb-3">

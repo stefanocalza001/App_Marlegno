@@ -1,7 +1,8 @@
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { mockCantieri } from "@/mocks/cantieri";
 import {
   ChevronLeft,
@@ -10,11 +11,22 @@ import {
   ShieldAlert,
   AlertTriangle,
   MapPin,
+  CheckCircle2,
 } from "lucide-react";
 
-export default function CantiereDetailPage() {
+function CantiereDetailContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [showSavedToast, setShowSavedToast] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("saved") === "1") {
+      setShowSavedToast(true);
+      const timer = setTimeout(() => setShowSavedToast(false), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   const cantiere = mockCantieri.find((c) => c.id === params.id);
 
@@ -39,7 +51,6 @@ export default function CantiereDetailPage() {
     );
   }
 
-  // Rimossa qualsiasi logica o riferimento alla percentuale SAL
   const checklistSubtitle = cantiere.checklistCompilata
     ? "Aggiornamento Checklist"
     : "Prima compilazione";
@@ -50,11 +61,21 @@ export default function CantiereDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6">
+      {showSavedToast && (
+        <div
+          role="status"
+          className="fixed top-20 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>Documento salvato con successo</span>
+        </div>
+      )}
+
       {/* Header con bottone Indietro e Nome Cantiere */}
       <div className="space-y-3">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => router.push("/dashboard")}
           className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-brand shadow-sm transition-transform active:scale-95"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -142,5 +163,13 @@ export default function CantiereDetailPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function CantiereDetailPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-2xl p-6 text-sm text-slate-500">Caricamento cantiere...</div>}>
+      <CantiereDetailContent />
+    </Suspense>
   );
 }
