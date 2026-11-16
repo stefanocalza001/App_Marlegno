@@ -1,48 +1,54 @@
 "use client";
 
-import { useAuth } from "@/lib/AuthContext";
-import { Button } from "@/components/ui/Button";
-import { HardHat, LogOut } from "lucide-react";
+import Link from "next/link";
+import { mockCantieri } from "@/mocks/cantieri";
+import { HardHat, MapPin, ChevronRight } from "lucide-react";
 
 export default function GeometraDashboardPage() {
-  const { user, logout } = useAuth();
+  const cantieriAttivi = mockCantieri.filter(
+    (cantiere) => cantiere.stato === "Aperto"
+  );
 
   return (
-    <main className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-md space-y-6">
-        <header className="flex items-center justify-between rounded-super bg-surface p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand/10 text-brand">
-              <HardHat className="h-6 w-6" />
-            </div>
-            <div>
-              <span className="inline-block rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand">
-                Area Geometra
-              </span>
-              <h1 className="text-xl font-bold text-slate-900">
-                Dashboard Cantiere
-              </h1>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" onClick={logout} aria-label="Esci">
-            <LogOut className="h-4 w-4" />
-            <span>Esci</span>
-          </Button>
-        </header>
-
-        <section className="rounded-super bg-surface p-6 shadow-sm">
-          <p className="text-sm text-slate-500">Utente attivo</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {user?.name ?? "Mario Rossi"} ({user?.role ?? "GEOMETRA"})
-          </p>
-          {user?.email && (
-            <p className="text-xs text-slate-400">{user.email}</p>
-          )}
-          <p className="mt-3 text-sm text-slate-600">
-            Benvenuto nella vista operativa mobile per la gestione dei cantieri assegnati.
-          </p>
-        </section>
+    <div className="mx-auto max-w-md">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          I tuoi cantieri attivi
+        </h1>
+        <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
+          {cantieriAttivi.length} attivi
+        </span>
       </div>
-    </main>
+
+      <div>
+        {cantieriAttivi.map((cantiere) => (
+          <Link
+            key={cantiere.id}
+            href={`/cantiere/${cantiere.id}`}
+            className="block rounded-super bg-white p-5 mb-4 shadow-sm transition-transform duration-150 active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand/10 text-brand">
+                  <HardHat className="h-6 w-6" />
+                </div>
+
+                <div className="space-y-1">
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {cantiere.nome}
+                  </h2>
+                  <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                    <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
+                    <span>{cantiere.indirizzo}</span>
+                  </div>
+                </div>
+              </div>
+
+              <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }

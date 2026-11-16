@@ -7,3 +7,13 @@ export interface User {
   role: UserRole;
   name: string;
 }
+
+export type StatoCantiere = "Aperto" | "Chiuso";
+
+export interface Cantiere {
+  id: string;
+  nome: string;
+  indirizzo: string;
+  stato: StatoCantiere;
+  ultimoSal: number;
+}
