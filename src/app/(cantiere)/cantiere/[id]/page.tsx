@@ -20,7 +20,7 @@ export default function CantiereDetailPage() {
 
   if (!cantiere) {
     return (
-      <div className="mx-auto max-w-md space-y-4">
+      <div className="mx-auto w-full max-w-2xl space-y-4">
         <button
           type="button"
           onClick={() => router.back()}
@@ -39,13 +39,17 @@ export default function CantiereDetailPage() {
     );
   }
 
-  const checklistSubtitle =
-    cantiere.ultimoSal === 0
-      ? "Prima compilazione"
-      : `Aggiorna (Ultimo SAL: ${cantiere.ultimoSal}%)`;
+  // Rimossa qualsiasi logica o riferimento alla percentuale SAL
+  const checklistSubtitle = cantiere.checklistCompilata
+    ? "Aggiornamento Checklist"
+    : "Prima compilazione";
+
+  const checklistHref = cantiere.checklistCompilata
+    ? `/cantiere/${cantiere.id}/checklist?update=true`
+    : `/cantiere/${cantiere.id}/checklist`;
 
   return (
-    <div className="mx-auto max-w-md space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
       {/* Header con bottone Indietro e Nome Cantiere */}
       <div className="space-y-3">
         <button
@@ -76,7 +80,7 @@ export default function CantiereDetailPage() {
 
         {/* 1. Checklist Cantiere (Evidenziata con sfondo verde chiaro) */}
         <Link
-          href={`/cantiere/${cantiere.id}/checklist`}
+          href={checklistHref}
           className="flex h-28 w-full items-center justify-between rounded-super border border-brand/20 bg-brand/[0.08] p-5 text-left shadow-sm transition-transform duration-150 active:scale-[0.98]"
         >
           <div className="flex items-center gap-4">

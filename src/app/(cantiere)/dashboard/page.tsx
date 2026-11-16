@@ -10,7 +10,7 @@ export default function GeometraDashboardPage() {
   );
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto w-full max-w-2xl">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           I tuoi cantieri attivi

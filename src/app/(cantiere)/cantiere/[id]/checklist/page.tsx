@@ -1,19 +1,22 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { mockCantieri } from "@/mocks/cantieri";
 import { ChecklistForm } from "@/components/forms/ChecklistForm";
 import { ChevronLeft } from "lucide-react";
 
-export default function CantiereChecklistPage() {
+function ChecklistPageContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
+  const isUpdate = searchParams.get("update") === "true";
   const cantiere = mockCantieri.find((c) => c.id === params.id);
 
   if (!cantiere) {
     return (
-      <div className="mx-auto max-w-md space-y-4">
+      <div className="mx-auto w-full max-w-2xl space-y-4">
         <button
           type="button"
           onClick={() => router.back()}
@@ -33,9 +36,8 @@ export default function CantiereChecklistPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-5">
-      {/* Header Pagina Checklist */}
-      <div className="space-y-3">
+    <div className="mx-auto w-full max-w-2xl space-y-5">
+      <div>
         <button
           type="button"
           onClick={() => router.back()}
@@ -44,19 +46,22 @@ export default function CantiereChecklistPage() {
           <ChevronLeft className="h-4 w-4" />
           <span>Torna al cantiere</span>
         </button>
-
-        <div className="px-1">
-          <span className="inline-block rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand">
-            Modulo Sicurezza Cantiere
-          </span>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-            Checklist Sicurezza
-          </h1>
-        </div>
       </div>
 
       {/* Form Principale a Singolo Blocco di Scorrimento */}
-      <ChecklistForm cantiere={cantiere} />
+      <ChecklistForm
+        key={isUpdate ? "update" : "new"}
+        cantiere={cantiere}
+        isUpdate={isUpdate}
+      />
     </div>
+  );
+}
+
+export default function CantiereChecklistPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-2xl p-6 text-sm text-slate-500">Caricamento checklist...</div>}>
+      <ChecklistPageContent />
+    </Suspense>
   );
 }

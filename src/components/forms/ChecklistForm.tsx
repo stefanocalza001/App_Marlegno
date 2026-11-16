@@ -77,7 +77,7 @@ export const SECTIONS: ChecklistSectionDef[] = [
     title: "6. DPI, Igiene e Gestione Emergenze",
     items: [
       "Utilizzo costante dei DPI (casco, calzature S3, imbracatura anticaduta, guanti)",
-      "Presenza presidi di primo soccorso (cassetta medicazione) ed estintori",
+      "Presidi di primo soccorso (cassetta medicazione) ed estintori presenti",
       "Servizi igienico-assistenziali e spogliatoi puliti e adeguatamente attrezzati",
     ],
   },
@@ -118,9 +118,13 @@ const ESITO_COMPLESSIVO_OPTIONS = [
 
 interface ChecklistFormProps {
   cantiere: Cantiere;
+  isUpdate?: boolean;
 }
 
-export function ChecklistForm({ cantiere }: ChecklistFormProps) {
+export function ChecklistForm({
+  cantiere,
+  isUpdate = false,
+}: ChecklistFormProps) {
   const { user } = useAuth();
   const todayFormatted = new Date().toLocaleDateString("it-IT", {
     day: "2-digit",
@@ -130,22 +134,48 @@ export function ChecklistForm({ cantiere }: ChecklistFormProps) {
 
   const [formData, setFormData] = useState<ChecklistFormState>(() => {
     const initialSections: Record<string, SectionState> = {};
-    for (const sec of SECTIONS) {
+
+    for (const [secIdx, sec] of SECTIONS.entries()) {
       const initialItems: Record<number, ItemState> = {};
+
       sec.items.forEach((_, idx) => {
-        initialItems[idx] = { esito: "Conforme", nota: "" };
+        if (isUpdate) {
+          // Modalità Aggiornamento: precompila le voci principali su "Conforme"
+          // lasciando gli ultimi punti su "Da verificare" per mostrare la differenza visiva
+          const isPrechecked = secIdx < 4 || idx === 0;
+          initialItems[idx] = {
+            esito: isPrechecked ? "Conforme" : "Da verificare",
+            nota:
+              secIdx === 0 && idx === 0
+                ? "Verificato nel sopralluogo precedente"
+                : "",
+          };
+        } else {
+          // Modalità Prima Compilazione: foglio da verificare
+          initialItems[idx] = {
+            esito: "Da verificare",
+            nota: "",
+          };
+        }
       });
+
       initialSections[sec.id] = {
         nonPresente: false,
-        osservazioni: "",
+        osservazioni:
+          isUpdate && secIdx === 0
+            ? "Area di cantiere delimitata e accessi regolari."
+            : "",
         items: initialItems,
       };
     }
+
     return {
       sections: initialSections,
       esitoComplessivo: "Regolare",
       prescrizioni: "",
-      noteGenerali: "",
+      noteGenerali: isUpdate
+        ? "Aggiornamento periodico della checklist di conformità cantiere."
+        : "",
       hasImpresaSignature: false,
     };
   });
@@ -208,6 +238,7 @@ export function ChecklistForm({ cantiere }: ChecklistFormProps) {
         JSON.stringify({
           cantiereId: cantiere.id,
           cantiereNome: cantiere.nome,
+          isUpdate,
           dataCompilazione: todayFormatted,
           tecnico: user?.name ?? "Mario Rossi",
           ...formData,
@@ -217,7 +248,9 @@ export function ChecklistForm({ cantiere }: ChecklistFormProps) {
       // Ignora errori localStorage
     }
     window.alert(
-      `Checklist di Sicurezza per "${cantiere.nome}" salvata con successo! Generazione PDF avviata.`
+      `${
+        isUpdate ? "Aggiornamento Checklist" : "Prima Compilazione Checklist"
+      } per "${cantiere.nome}" salvato con successo! Generazione PDF avviata.`
     );
   };
 
@@ -236,6 +269,22 @@ export function ChecklistForm({ cantiere }: ChecklistFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pb-28">
+      {/* Banner Titolo Modalità: Prima Compilazione vs Aggiornamento */}
+      <div className="px-1">
+        <span
+          className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+            isUpdate
+              ? "bg-amber-500/15 text-amber-800"
+              : "bg-brand/10 text-brand"
+          }`}
+        >
+          {isUpdate ? "Revisione dati pregressi" : "Nuovo sopralluogo"}
+        </span>
+        <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">
+          {isUpdate ? "Aggiornamento Checklist" : "Prima Compilazione Checklist"}
+        </h1>
+      </div>
+
       {/* 1. Intestazione Dati Generali Cantiere (Sola Lettura) */}
       <section className="rounded-super bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -297,25 +346,27 @@ export function ChecklistForm({ cantiere }: ChecklistFormProps) {
             key={section.id}
             className="overflow-hidden rounded-super bg-white shadow-sm"
           >
-            {/* Header Sezione con Toggle "Non presente in cantiere" */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand/10 bg-green-50/70 px-5 py-4">
+            {/* Header Sezione: Riga 1 = Titolo, Riga 2 = Toggle "Non presente in cantiere" */}
+            <div className="border-b border-brand/10 bg-green-50/70 px-5 py-4">
               <h3 className="text-base font-bold text-brand">
                 {section.title}
               </h3>
 
-              <label className="inline-flex cursor-pointer items-center gap-2 select-none">
-                <input
-                  type="checkbox"
-                  checked={isDisabled}
-                  onChange={(e) =>
-                    handleToggleSection(section.id, e.target.checked)
-                  }
-                  className="h-5 w-5 rounded border-slate-300 text-brand focus:ring-brand"
-                />
-                <span className="text-xs font-semibold text-slate-700">
-                  Non presente in cantiere
-                </span>
-              </label>
+              <div className="mt-2.5 flex items-center">
+                <label className="inline-flex cursor-pointer items-center gap-2.5 select-none rounded-full bg-white/80 px-3 py-1.5 shadow-2xs ring-1 ring-brand/15">
+                  <input
+                    type="checkbox"
+                    checked={isDisabled}
+                    onChange={(e) =>
+                      handleToggleSection(section.id, e.target.checked)
+                    }
+                    className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                  />
+                  <span className="text-xs font-semibold text-slate-700">
+                    Non presente in cantiere
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* Corpo Sezione (opacizzato e disabilitato se "Non presente in cantiere" è attivo) */}
@@ -519,7 +570,7 @@ export function ChecklistForm({ cantiere }: ChecklistFormProps) {
 
       {/* 5. Bottone Fisso in Basso: Salva e Genera PDF */}
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/95 p-4 backdrop-blur-md">
-        <div className="mx-auto max-w-md">
+        <div className="mx-auto max-w-2xl">
           <button
             type="submit"
             className="flex h-14 w-full items-center justify-center gap-2 rounded-super bg-brand px-6 text-lg font-semibold text-white shadow-md transition-transform duration-150 hover:bg-brand-hover active:scale-95"

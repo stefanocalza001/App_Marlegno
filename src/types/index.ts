@@ -15,5 +15,6 @@ export interface Cantiere {
   nome: string;
   indirizzo: string;
   stato: StatoCantiere;
-  ultimoSal: number;
+  checklistCompilata: boolean;
+  // ultimoSal?: number; // Rimosso riferimento alla percentuale SAL
 }
