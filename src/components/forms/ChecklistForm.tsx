@@ -8,6 +8,7 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   FileCheck2,
   MapPin,
@@ -140,18 +141,12 @@ export function ChecklistForm({
 
       sec.items.forEach((_, idx) => {
         if (isUpdate) {
-          // Modalità Aggiornamento: precompila le voci principali su "Conforme"
-          // lasciando gli ultimi punti su "Da verificare" per mostrare la differenza visiva
           const isPrechecked = secIdx < 4 || idx === 0;
           initialItems[idx] = {
             esito: isPrechecked ? "Conforme" : "Da verificare",
-            nota:
-              secIdx === 0 && idx === 0
-                ? "Verificato nel sopralluogo precedente"
-                : "",
+            nota: "",
           };
         } else {
-          // Modalità Prima Compilazione: foglio da verificare
           initialItems[idx] = {
             esito: "Da verificare",
             nota: "",
@@ -161,10 +156,7 @@ export function ChecklistForm({
 
       initialSections[sec.id] = {
         nonPresente: false,
-        osservazioni:
-          isUpdate && secIdx === 0
-            ? "Area di cantiere delimitata e accessi regolari."
-            : "",
+        osservazioni: "",
         items: initialItems,
       };
     }
@@ -173,9 +165,7 @@ export function ChecklistForm({
       sections: initialSections,
       esitoComplessivo: "Regolare",
       prescrizioni: "",
-      noteGenerali: isUpdate
-        ? "Aggiornamento periodico della checklist di conformità cantiere."
-        : "",
+      noteGenerali: "",
       hasImpresaSignature: false,
     };
   });
@@ -269,20 +259,41 @@ export function ChecklistForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pb-28">
-      {/* Banner Titolo Modalità: Prima Compilazione vs Aggiornamento */}
-      <div className="px-1">
-        <span
-          className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-            isUpdate
-              ? "bg-amber-500/15 text-amber-800"
-              : "bg-brand/10 text-brand"
-          }`}
-        >
-          {isUpdate ? "Revisione dati pregressi" : "Nuovo sopralluogo"}
-        </span>
-        <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">
-          {isUpdate ? "Aggiornamento Checklist" : "Prima Compilazione Checklist"}
-        </h1>
+      {/* Header Titolo e Box Storicizzazione (Metadati Revisione) */}
+      <div>
+        <div className="px-1 mb-3">
+          <span
+            className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+              isUpdate
+                ? "bg-amber-500/15 text-amber-800"
+                : "bg-brand/10 text-brand"
+            }`}
+          >
+            {isUpdate ? "Revisione dati pregressi" : "Nuovo sopralluogo"}
+          </span>
+          <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">
+            {isUpdate
+              ? "Aggiornamento Checklist"
+              : "Prima Compilazione Checklist"}
+          </h1>
+        </div>
+
+        {isUpdate ? (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-6 flex flex-wrap justify-between items-center gap-2 text-sm text-gray-500">
+            <span>Ultima modifica: 12 Novembre 2026</span>
+            <span className="font-semibold text-gray-700">Revisione n° 4</span>
+            <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand">
+              Status: In Lavorazione
+            </span>
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-6 flex flex-wrap justify-between items-center gap-2 text-sm text-gray-500">
+            <span className="font-semibold text-gray-700">
+              Creazione nuova revisione (Rev. 1)
+            </span>
+            <span>Data odierna: {todayFormatted}</span>
+          </div>
+        )}
       </div>
 
       {/* 1. Intestazione Dati Generali Cantiere (Sola Lettura) */}
@@ -388,33 +399,36 @@ export function ChecklistForm({
                         {itemText}
                       </p>
 
-                      {/* Controlli Mobile-First: Select Esito + Input Note */}
+                      {/* Controlli Mobile-First: Select Esito (con freccia custom pr-10) + Input Note */}
                       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                         <div>
                           <label className="mb-1 block text-xs font-medium text-slate-500">
                             Esito verifica
                           </label>
-                          <select
-                            value={itemState.esito}
-                            disabled={isDisabled}
-                            onChange={(e) =>
-                              handleItemChange(
-                                section.id,
-                                idx,
-                                "esito",
-                                e.target.value as EsitoVoce
-                              )
-                            }
-                            className={`h-12 w-full rounded-2xl border px-3.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand/20 ${getSelectColorClasses(
-                              itemState.esito
-                            )}`}
-                          >
-                            {ESITO_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="relative">
+                            <select
+                              value={itemState.esito}
+                              disabled={isDisabled}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  section.id,
+                                  idx,
+                                  "esito",
+                                  e.target.value as EsitoVoce
+                                )
+                              }
+                              className={`h-12 w-full appearance-none rounded-2xl border pl-3.5 pr-10 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand/20 ${getSelectColorClasses(
+                                itemState.esito
+                              )}`}
+                            >
+                              {ESITO_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 opacity-70" />
+                          </div>
                         </div>
 
                         <div>
@@ -477,22 +491,25 @@ export function ChecklistForm({
           <label className="block text-sm font-semibold text-slate-700">
             Esito Generale
           </label>
-          <select
-            value={formData.esitoComplessivo}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                esitoComplessivo: e.target.value,
-              }))
-            }
-            className="h-12 w-full rounded-2xl border border-brand/30 bg-brand/[0.05] px-4 text-sm font-bold text-brand focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-          >
-            {ESITO_COMPLESSIVO_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={formData.esitoComplessivo}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  esitoComplessivo: e.target.value,
+                }))
+              }
+              className="h-12 w-full appearance-none rounded-2xl border border-brand/30 bg-brand/[0.05] pl-4 pr-10 text-sm font-bold text-brand focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              {ESITO_COMPLESSIVO_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand opacity-80" />
+          </div>
         </div>
 
         <div className="space-y-2">
